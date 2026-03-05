@@ -1,0 +1,153 @@
+name: Auto-create PRs to develop
+
+on:
+  push:
+    branches-ignore:
+      - "develop"
+      - "main"
+      - "master"
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  create_pr:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create PR, assign and request review (REST API)
+        env:
+          # Use a PAT instead of GITHUB_TOKEN so the created PR triggers
+          # pull_request events (unit-tests, integration-tests, lint, etc.).
+          # GITHUB_TOKEN-created PRs are intentionally blocked by GitHub from
+          # firing those events to prevent recursive workflow loops.
+          # Create a classic PAT with scope: repo (full) and store it as
+          # secrets.GH_PAT in repo/org secrets.
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+          REPO_FULL: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+          BASE_BRANCH: develop
+          HEAD_BRANCH: ${{ github.ref_name }}
+          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          MY_GITHUB_USERNAME: ${{ vars.MY_GITHUB_USERNAME }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${MY_GITHUB_USERNAME:-}" ]; then
+            echo "Missing vars.MY_GITHUB_USERNAME. Define it in repo variables."
+            exit 1
+          fi
+
+          if [ -z "${GITHUB_TOKEN:-}" ]; then
+            echo "Missing secrets.GH_PAT. Define it in repository secrets."
+            exit 1
+          fi
+
+          API="https://api.github.com"
+          AUTH_HEADER="Authorization: Bearer ${GITHUB_TOKEN}"
+          ACCEPT_HEADER="Accept: application/vnd.github+json"
+          REPO_URL="${API}/repos/${REPO_FULL}"
+
+          echo "Repo: ${REPO_FULL}"
+          echo "Base: ${BASE_BRANCH}"
+          echo "Head: ${HEAD_BRANCH}"
+
+          # Extract ticket like MLB-12 from branch name (optional)
+          # Works for: feature/MLB-12-desc, MLB-12-desc, feature/something-MLB-12-...
+          # Case-insensitive so feature/mlb-40-... is accepted; normalize to upper.
+          TICKET_ID="$({
+            echo "${HEAD_BRANCH}" | grep -ioE 'MLB-[0-9]+' | head -n 1 || true
+          } | tr '[:lower:]' '[:upper:]')"
+
+          # 1) Check if there's already an open PR from this branch
+          EXISTING_COUNT="$({
+            curl -sS -H "${AUTH_HEADER}" -H "${ACCEPT_HEADER}" \
+              "${REPO_URL}/pulls?state=open&head=${OWNER}:${HEAD_BRANCH}" \
+            | jq 'length'
+          })"
+
+          if [ "${EXISTING_COUNT}" -gt 0 ]; then
+            echo "PR already exists for ${OWNER}:${HEAD_BRANCH}. Nothing to do."
+            exit 0
+          fi
+
+          # 2) Create PR
+          COMMIT_MESSAGE="$(printf '%s' "${HEAD_COMMIT_MESSAGE:-}" | tr -d '\r')"
+          COMMIT_SUBJECT="$(printf '%s' "${COMMIT_MESSAGE}" | head -n 1)"
+
+          if [ -n "${COMMIT_SUBJECT}" ]; then
+            TITLE="${COMMIT_SUBJECT}"
+            BODY="${COMMIT_MESSAGE}"
+          elif [ -n "${TICKET_ID}" ]; then
+            TITLE="[${TICKET_ID}] - Auto PR: ${HEAD_BRANCH}"
+            BODY="PR creado automáticamente al hacer push a ${HEAD_BRANCH}."
+          else
+            TITLE="Auto PR: ${HEAD_BRANCH}"
+            BODY="PR creado automáticamente al hacer push a ${HEAD_BRANCH}."
+          fi
+
+          CREATE_PAYLOAD="$(jq -n \
+            --arg title "${TITLE}" \
+            --arg head "${HEAD_BRANCH}" \
+            --arg base "${BASE_BRANCH}" \
+            --arg body "${BODY}" \
+            '{title:$title, head:$head, base:$base, body:$body}'
+          )"
+
+          CREATE_RESPONSE="$(
+            curl -sS -X POST -H "${AUTH_HEADER}" -H "${ACCEPT_HEADER}" \
+              "${REPO_URL}/pulls" \
+              -d "${CREATE_PAYLOAD}"
+          )"
+
+          PR_URL="$(echo "${CREATE_RESPONSE}" | jq -r '.html_url // empty')"
+          PR_NUMBER="$(echo "${CREATE_RESPONSE}" | jq -r '.number // empty')"
+
+          if [ -z "${PR_URL}" ] || [ -z "${PR_NUMBER}" ]; then
+            echo "Failed to create PR. API response:"
+            echo "${CREATE_RESPONSE}" | jq .
+            exit 1
+          fi
+
+          echo "PR created: ${PR_URL} (#${PR_NUMBER})"
+
+          # 3) Assign PR to you (PR is also an issue)
+          ASSIGNEES_PAYLOAD="$(jq -n \
+            --arg user "${MY_GITHUB_USERNAME}" \
+            '{assignees: [$user]}'
+          )"
+
+          ASSIGN_RESPONSE="$(
+            curl -sS -X POST -H "${AUTH_HEADER}" -H "${ACCEPT_HEADER}" \
+              "${REPO_URL}/issues/${PR_NUMBER}/assignees" \
+              -d "${ASSIGNEES_PAYLOAD}"
+          )"
+
+          ASSIGN_OK="$(echo "${ASSIGN_RESPONSE}" | jq -r '.id // empty')"
+          if [ -z "${ASSIGN_OK}" ]; then
+            echo "Warning: failed to assign PR. Response:"
+            echo "${ASSIGN_RESPONSE}" | jq .
+          else
+            echo "Assigned to: ${MY_GITHUB_USERNAME}"
+          fi
+
+          # 4) Request review from you
+          REVIEWERS_PAYLOAD="$(jq -n \
+            --arg user "${MY_GITHUB_USERNAME}" \
+            '{reviewers: [$user]}'
+          )"
+
+          REVIEW_RESPONSE="$(
+            curl -sS -X POST -H "${AUTH_HEADER}" -H "${ACCEPT_HEADER}" \
+              "${REPO_URL}/pulls/${PR_NUMBER}/requested_reviewers" \
+              -d "${REVIEWERS_PAYLOAD}"
+          )"
+
+          REVIEW_OK="$(echo "${REVIEW_RESPONSE}" | jq -r '.id // empty')"
+          if [ -z "${REVIEW_OK}" ]; then
+            echo "Warning: failed to request reviewer. Response:"
+            echo "${REVIEW_RESPONSE}" | jq .
+          else
+            echo "Reviewer requested: ${MY_GITHUB_USERNAME}"
+          fi

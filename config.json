@@ -1,0 +1,16 @@
+{
+  "brand_colors": [
+    "#e61b8e",
+    "#d1ff02",
+    "#26f4ff",
+    "#ffe81f"
+  ],
+  "subtitles": {
+    "active_border_color_hex": "#000000",
+    "base_border_color_hex": "#000000",
+    "base_color_hex": "#FFFFFF",
+    "font_name": "Montserrat",
+    "font_size": 95,
+    "y_position": 1050
+  }
+}

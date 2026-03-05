@@ -1,0 +1,63 @@
+name: PR - Mutation Tests
+
+on:
+  pull_request:
+    branches:
+      - develop
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "scripts/**"
+      - ".github/workflows/**"
+      - "requirements*.txt"
+      - "pyproject.toml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-mutation-tests-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  mutation_tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run mutation tests
+        run: mutmut run
+
+      - name: Check mutation coverage
+        run: |
+          mutmut results > mutmut_results.txt
+          SURVIVED=$(grep -oP 'Survived: \K\d+' mutmut_results.txt || echo "0")
+          KILLED=$(grep -oP 'Killed: \K\d+' mutmut_results.txt || echo "0")
+          TIMEOUT=$(grep -oP 'Timeout: \K\d+' mutmut_results.txt || echo "0")
+          SUSPICIOUS=$(grep -oP 'Suspicious: \K\d+' mutmut_results.txt || echo "0")
+          TOTAL=$((SURVIVED + KILLED + TIMEOUT + SUSPICIOUS))
+
+          if [ $TOTAL -eq 0 ]; then
+            echo "No mutations found"
+            exit 0
+          fi
+
+          SCORE=$(awk "BEGIN {printf \"%.2f\", ($KILLED + $TIMEOUT) * 100 / $TOTAL}")
+          echo "Mutation score: $SCORE%"
+          echo "Killed: $KILLED, Survived: $SURVIVED, Timeout: $TIMEOUT, Suspicious: $SUSPICIOUS"
+
+          if (( $(echo "$SCORE < 90" | bc -l) )); then
+            echo "ERROR: Mutation coverage $SCORE% is below 90%"
+            exit 1
+          fi
