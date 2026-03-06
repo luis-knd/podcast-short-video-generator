@@ -167,12 +167,30 @@ python main.py \
   --output outputs/
 ```
 
+Para activar el outro opcional (bajo demanda) y aplicar transición suave:
+
+```bash
+python main.py \
+  --video inputs/mi_video_podcast.mp4 \
+  --subs inputs/mi_video_podcast.srt \
+  --intervals inputs/recortes.json \
+  --output outputs/ \
+  --enable-outro \
+  --outro inputs/outroShort.mp4 \
+  --fade-duration 0.7
+```
+
 #### Argumentos:
 
 - `--video`: (Opcional) Ruta al video horizontal base (por defecto: `inputs/video.mp4`).
 - `--subs`: (Opcional) Ruta al archivo de subtítulos correspondiente (por defecto: `inputs/video.srt`).
 - `--intervals`: (Opcional) Ruta al archivo JSON con los intervalos deseados (por defecto: `inputs/recortes.json`).
 - `--output`: (Opcional) Carpeta donde se guardarán los resultados (por defecto: `outputs`).
+- `--enable-outro`: (Opcional) Habilita la adición de outro al final de cada short generado.
+- `--outro`: (Opcional) Ruta del video de outro usado cuando `--enable-outro` está activo (por defecto: `inputs/outroShort.mp4`).
+- `--fade-duration`: (Opcional) Duración en segundos del fade de transición short/outro (por defecto: `0.7`).
+
+> Si `--enable-outro` está activo y el archivo de outro no existe, la aplicación continúa generando los shorts sin outro y muestra un `Warning` en consola.
 
 #### ¿Dónde se generan los Shorts?
 

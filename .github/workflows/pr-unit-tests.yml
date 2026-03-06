@@ -2,14 +2,11 @@ name: PR - Unit Tests
 
 on:
   pull_request:
-    branches:
-      - develop
     paths:
       - "src/**"
       - "tests/**"
       - ".github/workflows/**"
       - "requirements*.txt"
-      - "pyproject.toml"
 
 permissions:
   contents: read
@@ -20,6 +17,7 @@ concurrency:
 
 jobs:
   unit_tests:
+    if: ${{ github.event.pull_request.base.ref == github.event.repository.default_branch }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

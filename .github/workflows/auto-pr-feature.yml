@@ -1,4 +1,4 @@
-name: Auto-create PRs to develop
+name: Auto-create PRs to default branch
 
 on:
   push:
@@ -27,21 +27,27 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GH_PAT }}
           REPO_FULL: ${{ github.repository }}
           OWNER: ${{ github.repository_owner }}
-          BASE_BRANCH: develop
+          BASE_BRANCH: ${{ github.event.repository.default_branch }}
           HEAD_BRANCH: ${{ github.ref_name }}
           HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          GITHUB_ACTOR: ${{ github.actor }}
           MY_GITHUB_USERNAME: ${{ vars.MY_GITHUB_USERNAME }}
         run: |
           set -euo pipefail
 
-          if [ -z "${MY_GITHUB_USERNAME:-}" ]; then
-            echo "Missing vars.MY_GITHUB_USERNAME. Define it in repo variables."
-            exit 1
-          fi
-
           if [ -z "${GITHUB_TOKEN:-}" ]; then
             echo "Missing secrets.GH_PAT. Define it in repository secrets."
             exit 1
+          fi
+
+          REVIEW_USERNAME="${MY_GITHUB_USERNAME:-}"
+          if [ -z "${REVIEW_USERNAME}" ]; then
+            REVIEW_USERNAME="${GITHUB_ACTOR:-}"
+            if [ -n "${REVIEW_USERNAME}" ]; then
+              echo "vars.MY_GITHUB_USERNAME is missing; using github.actor=${REVIEW_USERNAME}"
+            else
+              echo "Warning: No reviewer username available. Assign/review steps will be skipped."
+            fi
           fi
 
           API="https://api.github.com"
@@ -53,11 +59,11 @@ jobs:
           echo "Base: ${BASE_BRANCH}"
           echo "Head: ${HEAD_BRANCH}"
 
-          # Extract ticket like MLB-12 from branch name (optional)
-          # Works for: feature/MLB-12-desc, MLB-12-desc, feature/something-MLB-12-...
-          # Case-insensitive so feature/mlb-40-... is accepted; normalize to upper.
+          # Extract ticket like EWS-12 from branch name (optional)
+          # Works for: feature/EWS-12-desc, EWS-12-desc, feature/something-EWS-12-...
+          # Case-insensitive so feature/ews-40-... is accepted; normalize to upper.
           TICKET_ID="$({
-            echo "${HEAD_BRANCH}" | grep -ioE 'MLB-[0-9]+' | head -n 1 || true
+            echo "${HEAD_BRANCH}" | grep -ioE 'EWS-[0-9]+' | head -n 1 || true
           } | tr '[:lower:]' '[:upper:]')"
 
           # 1) Check if there's already an open PR from this branch
@@ -112,42 +118,46 @@ jobs:
 
           echo "PR created: ${PR_URL} (#${PR_NUMBER})"
 
-          # 3) Assign PR to you (PR is also an issue)
-          ASSIGNEES_PAYLOAD="$(jq -n \
-            --arg user "${MY_GITHUB_USERNAME}" \
-            '{assignees: [$user]}'
-          )"
+          if [ -n "${REVIEW_USERNAME}" ]; then
+            # 3) Assign PR (PR is also an issue)
+            ASSIGNEES_PAYLOAD="$(jq -n \
+              --arg user "${REVIEW_USERNAME}" \
+              '{assignees: [$user]}'
+            )"
 
-          ASSIGN_RESPONSE="$(
-            curl -sS -X POST -H "${AUTH_HEADER}" -H "${ACCEPT_HEADER}" \
-              "${REPO_URL}/issues/${PR_NUMBER}/assignees" \
-              -d "${ASSIGNEES_PAYLOAD}"
-          )"
+            ASSIGN_RESPONSE="$(
+              curl -sS -X POST -H "${AUTH_HEADER}" -H "${ACCEPT_HEADER}" \
+                "${REPO_URL}/issues/${PR_NUMBER}/assignees" \
+                -d "${ASSIGNEES_PAYLOAD}"
+            )"
 
-          ASSIGN_OK="$(echo "${ASSIGN_RESPONSE}" | jq -r '.id // empty')"
-          if [ -z "${ASSIGN_OK}" ]; then
-            echo "Warning: failed to assign PR. Response:"
-            echo "${ASSIGN_RESPONSE}" | jq .
+            ASSIGN_OK="$(echo "${ASSIGN_RESPONSE}" | jq -r '.id // empty')"
+            if [ -z "${ASSIGN_OK}" ]; then
+              echo "Warning: failed to assign PR. Response:"
+              echo "${ASSIGN_RESPONSE}" | jq .
+            else
+              echo "Assigned to: ${REVIEW_USERNAME}"
+            fi
+
+            # 4) Request review
+            REVIEWERS_PAYLOAD="$(jq -n \
+              --arg user "${REVIEW_USERNAME}" \
+              '{reviewers: [$user]}'
+            )"
+
+            REVIEW_RESPONSE="$(
+              curl -sS -X POST -H "${AUTH_HEADER}" -H "${ACCEPT_HEADER}" \
+                "${REPO_URL}/pulls/${PR_NUMBER}/requested_reviewers" \
+                -d "${REVIEWERS_PAYLOAD}"
+            )"
+
+            REVIEW_OK="$(echo "${REVIEW_RESPONSE}" | jq -r '.id // empty')"
+            if [ -z "${REVIEW_OK}" ]; then
+              echo "Warning: failed to request reviewer. Response:"
+              echo "${REVIEW_RESPONSE}" | jq .
+            else
+              echo "Reviewer requested: ${REVIEW_USERNAME}"
+            fi
           else
-            echo "Assigned to: ${MY_GITHUB_USERNAME}"
-          fi
-
-          # 4) Request review from you
-          REVIEWERS_PAYLOAD="$(jq -n \
-            --arg user "${MY_GITHUB_USERNAME}" \
-            '{reviewers: [$user]}'
-          )"
-
-          REVIEW_RESPONSE="$(
-            curl -sS -X POST -H "${AUTH_HEADER}" -H "${ACCEPT_HEADER}" \
-              "${REPO_URL}/pulls/${PR_NUMBER}/requested_reviewers" \
-              -d "${REVIEWERS_PAYLOAD}"
-          )"
-
-          REVIEW_OK="$(echo "${REVIEW_RESPONSE}" | jq -r '.id // empty')"
-          if [ -z "${REVIEW_OK}" ]; then
-            echo "Warning: failed to request reviewer. Response:"
-            echo "${REVIEW_RESPONSE}" | jq .
-          else
-            echo "Reviewer requested: ${MY_GITHUB_USERNAME}"
+            echo "Skipping assign and reviewer request (no username configured)."
           fi

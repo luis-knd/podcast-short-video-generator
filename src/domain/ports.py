@@ -12,6 +12,8 @@ class IVideoProcessor(abc.ABC):
         interval: TimeInterval,
         target_format: VideoFormat,
         output_filepath: str,
+        outro_filepath: str | None = None,
+        fade_duration: float = 0.7,
     ) -> ShortVideo:
         """
         Extracts a clip from the video at the given interval, formats it to the target format,

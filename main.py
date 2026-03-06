@@ -6,6 +6,7 @@ import sys
 from src.application.use_cases import GenerateShortUseCase
 from src.domain.exceptions import ShortGeneratorError
 from src.infrastructure.ffmpeg_processor import FFmpegVideoProcessor
+from src.interfaces.cli_utils import resolve_outro_filepath
 
 
 def main():
@@ -36,6 +37,23 @@ def main():
         default="outputs",
         help="Directory to save shorts (default: outputs)",
     )
+    parser.add_argument(
+        "--enable-outro",
+        action="store_true",
+        help="Enable optional outro concatenation at the end of every short",
+    )
+    parser.add_argument(
+        "--outro",
+        type=str,
+        default="inputs/outroShort.mp4",
+        help="Path to outro video used when --enable-outro is set",
+    )
+    parser.add_argument(
+        "--fade-duration",
+        type=float,
+        default=0.7,
+        help="Fade transition duration in seconds (default: 0.7)",
+    )
 
     args = parser.parse_args()
 
@@ -50,8 +68,17 @@ def main():
     if not os.path.exists(args.intervals):
         print(f"Error: Intervals JSON file not found: {args.intervals}")
         sys.exit(1)
+    if args.fade_duration < 0:
+        print("Error: --fade-duration must be greater than or equal to 0")
+        sys.exit(1)
 
     os.makedirs(args.output, exist_ok=True)
+
+    outro_filepath, outro_warning = resolve_outro_filepath(
+        enable_outro=args.enable_outro, outro_filepath=args.outro
+    )
+    if outro_warning:
+        print(outro_warning)
 
     with open(args.intervals) as f:
         try:
@@ -72,6 +99,8 @@ def main():
             subtitles_filepath=args.subs,
             intervals_json=intervals_json,
             output_dir=args.output,
+            outro_filepath=outro_filepath,
+            fade_duration=args.fade_duration,
         )
 
         print(f"Successfully generated {len(shorts)} shorts in {args.output}/")
