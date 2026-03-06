@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from main import resolve_outro_filepath
+from src.interfaces.cli_utils import resolve_outro_filepath
 
 
 def test_resolve_outro_filepath_disabled():
@@ -13,7 +13,7 @@ def test_resolve_outro_filepath_disabled():
     assert warning_message is None
 
 
-@patch("main.os.path.exists", return_value=True)
+@patch("src.interfaces.cli_utils.os.path.exists", return_value=True)
 def test_resolve_outro_filepath_enabled_and_exists(_mock_exists):
     resolved_outro, warning_message = resolve_outro_filepath(
         enable_outro=True,
@@ -24,7 +24,7 @@ def test_resolve_outro_filepath_enabled_and_exists(_mock_exists):
     assert warning_message is None
 
 
-@patch("main.os.path.exists", return_value=False)
+@patch("src.interfaces.cli_utils.os.path.exists", return_value=False)
 def test_resolve_outro_filepath_enabled_and_missing(_mock_exists):
     resolved_outro, warning_message = resolve_outro_filepath(
         enable_outro=True,

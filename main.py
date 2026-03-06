@@ -6,19 +6,7 @@ import sys
 from src.application.use_cases import GenerateShortUseCase
 from src.domain.exceptions import ShortGeneratorError
 from src.infrastructure.ffmpeg_processor import FFmpegVideoProcessor
-
-
-def resolve_outro_filepath(
-    enable_outro: bool, outro_filepath: str
-) -> tuple[str | None, str | None]:
-    if not enable_outro:
-        return None, None
-    if os.path.exists(outro_filepath):
-        return outro_filepath, None
-    warning_message = (
-        f"Warning: Outro file not found: {outro_filepath}. Continuing without outro."
-    )
-    return None, warning_message
+from src.interfaces.cli_utils import resolve_outro_filepath
 
 
 def main():
