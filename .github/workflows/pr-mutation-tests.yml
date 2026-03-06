@@ -32,18 +32,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install mutmut
+          pip install "mutmut<3"
 
       - name: Run mutation tests
-        run: mutmut run
+        run: mutmut run --CI --no-progress --simple-output
 
       - name: Check mutation coverage
         run: |
-          mutmut results > mutmut_results.txt
-          SURVIVED=$(grep -oP 'Survived: \K\d+' mutmut_results.txt || echo "0")
-          KILLED=$(grep -oP 'Killed: \K\d+' mutmut_results.txt || echo "0")
-          TIMEOUT=$(grep -oP 'Timeout: \K\d+' mutmut_results.txt || echo "0")
-          SUSPICIOUS=$(grep -oP 'Suspicious: \K\d+' mutmut_results.txt || echo "0")
+          SURVIVED=$(mutmut result-ids survived | wc -w | tr -d ' ')
+          KILLED=$(mutmut result-ids killed | wc -w | tr -d ' ')
+          TIMEOUT=$(mutmut result-ids timeout | wc -w | tr -d ' ')
+          SUSPICIOUS=$(mutmut result-ids suspicious | wc -w | tr -d ' ')
           TOTAL=$((SURVIVED + KILLED + TIMEOUT + SUSPICIOUS))
 
           if [ $TOTAL -eq 0 ]; then
