@@ -98,9 +98,11 @@ outputs/
 inputs/*.mp4
 inputs/*.srt
 inputs/*.json
+outputs_*/
 
 # Local testing and temporary files not for version control
 test_intervals.json
 parse_srt_test.py
 dump_mutants.sh
 print_baseline.py
+docs/plans/

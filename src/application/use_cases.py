@@ -13,6 +13,8 @@ class GenerateShortUseCase:
         subtitles_filepath: str,
         intervals_json: list[dict[str, str]],
         output_dir: str,
+        outro_filepath: str | None = None,
+        fade_duration: float = 0.7,
     ) -> list[ShortVideo]:
         """
         Orchestrates the creation of shorts from a single video and multiple intervals.
@@ -36,6 +38,8 @@ class GenerateShortUseCase:
                 interval=interval,
                 target_format=target_format,
                 output_filepath=output_filepath,
+                outro_filepath=outro_filepath,
+                fade_duration=fade_duration,
             )
             generated_shorts.append(short)
 
