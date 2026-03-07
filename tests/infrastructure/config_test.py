@@ -83,6 +83,14 @@ def test_get_subtitle_setting():
         assert c.get_subtitle_setting("font", "Roboto") == "Roboto"
 
 
+def test_get_alignment_setting():
+    with patch("os.path.exists", return_value=False):
+        c = ConfigManager()
+        c.config = {"alignment": {"enabled": False}}
+        assert c.get_alignment_setting("enabled", True) is False
+        assert c.get_alignment_setting("backend", "faster_whisper") == "faster_whisper"
+
+
 def test_hex_to_ass_color():
     # Make sure staticmethod is used by calling on an instance
     c = ConfigManager()
@@ -135,8 +143,7 @@ def test_hex_to_ass_color_reads_blue_component_with_stop_index_six():
 
     assert result == "&HCCBBAA&"
     assert any(
-        isinstance(slice_key, slice) and slice_key.start == 4 and slice_key.stop == 6
-        for slice_key in probe.seen_slices
+        isinstance(slice_key, slice) and slice_key.start == 4 and slice_key.stop == 6 for slice_key in probe.seen_slices
     )
 
 

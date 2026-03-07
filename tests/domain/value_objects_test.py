@@ -70,9 +70,7 @@ def test_time_interval_from_string_seconds():
 
 
 def test_time_interval_from_string_invalid_format():
-    with pytest.raises(
-        DomainError, match="^Invalid time format: 01:30. Expected 'MM:SS - MM:SS'$"
-    ):
+    with pytest.raises(DomainError, match="^Invalid time format: 01:30. Expected 'MM:SS - MM:SS'$"):
         TimeInterval.from_string("01:30")
 
 
