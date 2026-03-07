@@ -1,0 +1,116 @@
+---
+title: Execution Flow
+config:
+  theme: base
+  look: classic
+  themeVariables:
+    background: "#fffdf8"
+    primaryColor: "#fff1cf"
+    primaryBorderColor: "#9e7b08"
+    primaryTextColor: "#312400"
+    secondaryColor: "#dff5ea"
+    tertiaryColor: "#e4edff"
+    lineColor: "#2f62c9"
+    clusterBkg: "#fffaf2"
+    clusterBorder: "#8c7764"
+    mainBkg: "#fffefb"
+  themeCSS: |
+    .flowchart-link {
+      stroke-dasharray: 8 !important;
+      animation: line-flow 1.2s linear infinite !important;
+      stroke-width: 2.4px !important;
+    }
+    .node rect, .node path, .node polygon, .node circle {
+      stroke-width: 2px !important;
+    }
+    @keyframes line-flow {
+      from { stroke-dashoffset: 18; }
+      to { stroke-dashoffset: 0; }
+    }
+---
+flowchart TD
+    USER([User runs CLI]):::entry
+    VALIDATE["Validate input files<br/>and intervals JSON"]:::process
+    EXECUTE["GenerateShortUseCase.execute"]:::process
+    LOOP{{For each interval}}:::decision
+    GENERATE["FFmpegVideoProcessor.generate_short"]:::process
+    SUBS["SubtitleProcessor.process_subtitles"]:::process
+    ALIGN_ENABLED{"alignment.enabled<br/>and media path?"}:::decision
+    LOAD_RAW["Load raw_asr cache"]:::cache
+    RAW_HIT{"Raw cache hit?"}:::decision
+    ALIGN["Align full source media<br/>with faster-whisper"]:::process
+    SAVE_RAW["Save raw_asr JSON"]:::cache
+    LOAD_REC["Load reconciled cache"]:::cache
+    REC_HIT{"Reconciled cache hit?"}:::decision
+    REC["Reconcile cues with ASR words"]:::process
+    SAVE_REC["Save reconciled JSON"]:::cache
+    FALLBACK["Use approximate word timing"]:::fallback
+    PROJECT["Project interval and group phrases"]:::process
+    WRITE_ASS["Write short_N.ass"]:::process
+    RENDER["Split-screen render<br/>and burn ASS"]:::process
+    OUTRO{"Outro enabled?"}:::decision
+    CONCAT["Append outro with fades"]:::process
+    OUTPUT([short_N.mp4 ready]):::entry
+    DONE([CLI prints generated outputs]):::entry
+
+    USER e1@--> VALIDATE
+    VALIDATE e2@--> EXECUTE
+    EXECUTE e3@--> LOOP
+    LOOP e4@--> GENERATE
+    GENERATE e5@--> SUBS
+    SUBS e6@--> ALIGN_ENABLED
+    ALIGN_ENABLED e7@-- yes --> LOAD_RAW
+    ALIGN_ENABLED e8@-- no --> FALLBACK
+    LOAD_RAW e9@--> RAW_HIT
+    RAW_HIT e10@-- no --> ALIGN
+    RAW_HIT e11@-- yes --> LOAD_REC
+    ALIGN e12@--> SAVE_RAW
+    SAVE_RAW e13@--> LOAD_REC
+    LOAD_REC e14@--> REC_HIT
+    REC_HIT e15@-- no --> REC
+    REC_HIT e16@-- yes --> PROJECT
+    REC e17@--> SAVE_REC
+    SAVE_REC e18@--> PROJECT
+    FALLBACK e19@--> PROJECT
+    PROJECT e20@--> WRITE_ASS
+    WRITE_ASS e21@--> RENDER
+    RENDER e22@--> OUTRO
+    OUTRO e23@-- yes --> CONCAT
+    OUTRO e24@-- no --> OUTPUT
+    CONCAT e25@--> OUTPUT
+    OUTPUT e26@--> LOOP
+    LOOP e27@-- done --> DONE
+
+    e1@{ animate: true }
+    e2@{ animate: true }
+    e3@{ animate: true }
+    e4@{ animate: true }
+    e5@{ animate: true }
+    e6@{ animate: true }
+    e7@{ animate: true }
+    e8@{ animate: true }
+    e9@{ animate: true }
+    e10@{ animate: true }
+    e11@{ animate: true }
+    e12@{ animate: true }
+    e13@{ animate: true }
+    e14@{ animate: true }
+    e15@{ animate: true }
+    e16@{ animate: true }
+    e17@{ animate: true }
+    e18@{ animate: true }
+    e19@{ animate: true }
+    e20@{ animate: true }
+    e21@{ animate: true }
+    e22@{ animate: true }
+    e23@{ animate: true }
+    e24@{ animate: true }
+    e25@{ animate: true }
+    e26@{ animate: true }
+    e27@{ animate: true }
+
+    classDef entry fill:#ffd9c7,stroke:#b15b2f,color:#26140a
+    classDef process fill:#dfeeff,stroke:#3963a3,color:#152036
+    classDef decision fill:#fff0c2,stroke:#9f7d09,color:#322500
+    classDef cache fill:#dff5ea,stroke:#2f7b5f,color:#10281f
+    classDef fallback fill:#f8dce7,stroke:#a04f78,color:#2a1321

@@ -263,12 +263,8 @@ This is a very long text that contains more than six words exactly.
     from unittest.mock import patch
 
     with (
-        patch(
-            "src.infrastructure.config.ConfigManager.get_subtitle_setting"
-        ) as mock_get_setting,
-        patch(
-            "src.infrastructure.config.ConfigManager.get_brand_colors"
-        ) as mock_colors,
+        patch("src.infrastructure.config.ConfigManager.get_subtitle_setting") as mock_get_setting,
+        patch("src.infrastructure.config.ConfigManager.get_brand_colors") as mock_colors,
     ):
 
         def mock_setting(key, default):
@@ -318,10 +314,7 @@ PlayResY: 1920
         "&H000000FF,&H000000&,&H80000000,-1,0,0,0,100,100,0,0,1,8,3,5,10,10,250,1\n"
     )
     assert active_layer_style in ass_content
-    assert (
-        "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
-        in ass_content
-    )
+    assert "[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" in ass_content
 
     # Check that multiline concatenated properly:
     # "Line one" and "Line two" are in parsed_data
@@ -421,18 +414,14 @@ Speaker 2: Starts exactly at interval end
     srt_file.write_text(srt_content, encoding="utf-8")
     ass_file = tmp_path / "boundaries.ass"
 
-    result = processor.process_subtitles(
-        str(srt_file), TimeInterval(10.0, 20.0), str(ass_file)
-    )
+    result = processor.process_subtitles(str(srt_file), TimeInterval(10.0, 20.0), str(ass_file))
 
     assert len(result) == 1
     assert result[0]["speaker"] == "Speaker 1"
     assert result[0]["phrase_text"] == "Inside interval"
 
 
-def test_process_subtitles_should_skip_non_overlapping_blocks_before_timing_calculation(
-    tmp_path, monkeypatch
-):
+def test_process_subtitles_should_skip_non_overlapping_blocks_before_timing_calculation(tmp_path, monkeypatch):
     processor = SubtitleProcessor()
     calls = []
 
@@ -459,9 +448,7 @@ Speaker 2: block outside after interval
     srt_file.write_text(srt_content, encoding="utf-8")
     ass_file = tmp_path / "interval-filter.ass"
 
-    result = processor.process_subtitles(
-        str(srt_file), TimeInterval(10.0, 20.0), str(ass_file)
-    )
+    result = processor.process_subtitles(str(srt_file), TimeInterval(10.0, 20.0), str(ass_file))
 
     assert len(result) == 1
     assert result[0]["speaker"] == "Speaker 1"
@@ -471,9 +458,7 @@ Speaker 2: block outside after interval
     assert calls[0][1] == 11000
 
 
-def test_process_subtitles_should_skip_boundary_block_ending_at_interval_start(
-    tmp_path, monkeypatch
-):
+def test_process_subtitles_should_skip_boundary_block_ending_at_interval_start(tmp_path, monkeypatch):
     processor = SubtitleProcessor()
     calls = []
 
@@ -496,9 +481,7 @@ Speaker 1: valid block
     srt_file.write_text(srt_content, encoding="utf-8")
     ass_file = tmp_path / "boundary-start.ass"
 
-    result = processor.process_subtitles(
-        str(srt_file), TimeInterval(10.0, 20.0), str(ass_file)
-    )
+    result = processor.process_subtitles(str(srt_file), TimeInterval(10.0, 20.0), str(ass_file))
 
     assert len(result) == 1
     assert result[0]["speaker"] == "Speaker 1"
@@ -533,9 +516,7 @@ Speaker 4: second valid
     srt_file.write_text(srt_content, encoding="utf-8")
     ass_file = tmp_path / "continue.ass"
 
-    result = processor.process_subtitles(
-        str(srt_file), TimeInterval(10.0, 12.0), str(ass_file)
-    )
+    result = processor.process_subtitles(str(srt_file), TimeInterval(10.0, 12.0), str(ass_file))
 
     assert [segment["speaker"] for segment in result] == ["Speaker 1", "Speaker 4"]
     assert [segment["phrase_text"] for segment in result] == [
@@ -561,9 +542,7 @@ Speaker 2: clipped
     srt_file.write_text(srt_content, encoding="utf-8")
     ass_file = tmp_path / "clip.ass"
 
-    result = processor.process_subtitles(
-        str(srt_file), TimeInterval(10.0, 12.0), str(ass_file)
-    )
+    result = processor.process_subtitles(str(srt_file), TimeInterval(10.0, 12.0), str(ass_file))
 
     assert len(result) == 2
     assert result[0]["phrase_text"] == "tiny"
@@ -583,9 +562,7 @@ def test_process_subtitles_should_keep_phrase_order_across_multiple_groups(tmp_p
     srt_file.write_text(srt_content, encoding="utf-8")
     ass_file = tmp_path / "phrases.ass"
 
-    result = processor.process_subtitles(
-        str(srt_file), TimeInterval(10.0, 30.0), str(ass_file)
-    )
+    result = processor.process_subtitles(str(srt_file), TimeInterval(10.0, 30.0), str(ass_file))
 
     assert len(result) == 3
     assert result[0]["phrase_text"] == "w1 w2 w3 w4 w5 w6"
@@ -598,9 +575,7 @@ def test_process_subtitles_should_keep_phrase_order_across_multiple_groups(tmp_p
     ]
 
 
-def test_write_ass_file_should_use_exact_config_keys_and_dialogue_format(
-    tmp_path, monkeypatch
-):
+def test_write_ass_file_should_use_exact_config_keys_and_dialogue_format(tmp_path, monkeypatch):
     processor = SubtitleProcessor()
     output_file = tmp_path / "exact.ass"
 
@@ -614,9 +589,7 @@ def test_write_ass_file_should_use_exact_config_keys_and_dialogue_format(
         }
         return values.get(key, f"UNEXPECTED::{key}")
 
-    monkeypatch.setattr(
-        "src.infrastructure.config.ConfigManager.get_subtitle_setting", get_setting
-    )
+    monkeypatch.setattr("src.infrastructure.config.ConfigManager.get_subtitle_setting", get_setting)
     monkeypatch.setattr(
         "src.infrastructure.config.ConfigManager.get_brand_colors",
         lambda _self: ["#112233", "#abcdef", "#445566"],
@@ -650,9 +623,7 @@ def test_write_ass_file_should_use_exact_config_keys_and_dialogue_format(
     assert content == expected
 
 
-def test_write_ass_file_should_use_defaults_when_settings_are_missing(
-    tmp_path, monkeypatch
-):
+def test_write_ass_file_should_use_defaults_when_settings_are_missing(tmp_path, monkeypatch):
     processor = SubtitleProcessor()
     output_file = tmp_path / "defaults.ass"
 
@@ -660,9 +631,7 @@ def test_write_ass_file_should_use_defaults_when_settings_are_missing(
         "src.infrastructure.config.ConfigManager.get_subtitle_setting",
         lambda _self, _key, default: default,
     )
-    monkeypatch.setattr(
-        "src.infrastructure.config.ConfigManager.get_brand_colors", lambda _self: []
-    )
+    monkeypatch.setattr("src.infrastructure.config.ConfigManager.get_brand_colors", lambda _self: [])
 
     call_index = {"value": 0}
 
@@ -673,17 +642,12 @@ def test_write_ass_file_should_use_defaults_when_settings_are_missing(
 
     monkeypatch.setattr("random.choice", cycle_choice)
 
-    processor._write_ass_file(
-        _make_segment(["one", "two", "three"], step_ms=500), str(output_file)
-    )
+    processor._write_ass_file(_make_segment(["one", "two", "three"], step_ms=500), str(output_file))
     content = output_file.read_text(encoding="utf-8")
 
     assert "Style: BaseLayer,Montserrat,85,&HFFFFFF&," in content
     assert "Style: ActiveLayer,Montserrat,85,&Hfff426&,&H000000FF,&H000000&," in content
-    assert (
-        "\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
-        in content
-    )
+    assert "\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n" in content
     assert "\\c&Hfff426&" in content
     assert "\\c&H8e1be6&" in content
     assert "\\c&H02ffd1&" in content
@@ -691,9 +655,7 @@ def test_write_ass_file_should_use_defaults_when_settings_are_missing(
     assert ",1050)}" in content
 
 
-def test_write_ass_file_should_use_configured_brand_palette_without_fallback(
-    tmp_path, monkeypatch
-):
+def test_write_ass_file_should_use_configured_brand_palette_without_fallback(tmp_path, monkeypatch):
     processor = SubtitleProcessor()
     output_file = tmp_path / "palette.ass"
 
@@ -714,9 +676,7 @@ def test_write_ass_file_should_use_configured_brand_palette_without_fallback(
     assert "\\c&H030201&" in content
 
 
-def test_write_ass_file_should_use_white_active_default_for_truthy_empty_palette(
-    tmp_path, monkeypatch
-):
+def test_write_ass_file_should_use_white_active_default_for_truthy_empty_palette(tmp_path, monkeypatch):
     processor = SubtitleProcessor()
     output_file = tmp_path / "truthy-empty.ass"
 
@@ -735,9 +695,7 @@ def test_write_ass_file_should_use_white_active_default_for_truthy_empty_palette
     assert "Style: ActiveLayer,Montserrat,85,&HFFFFFF&," in content
 
 
-def test_write_ass_file_should_use_expected_active_border_default_literal(
-    tmp_path, monkeypatch
-):
+def test_write_ass_file_should_use_expected_active_border_default_literal(tmp_path, monkeypatch):
     processor = SubtitleProcessor()
     output_file = tmp_path / "active-border-default.ass"
 
@@ -745,9 +703,7 @@ def test_write_ass_file_should_use_expected_active_border_default_literal(
         "src.infrastructure.config.ConfigManager.get_subtitle_setting",
         lambda _self, _key, default: default,
     )
-    monkeypatch.setattr(
-        "src.infrastructure.config.ConfigManager.get_brand_colors", lambda _self: []
-    )
+    monkeypatch.setattr("src.infrastructure.config.ConfigManager.get_brand_colors", lambda _self: [])
     monkeypatch.setattr(
         "src.infrastructure.config.ConfigManager.hex_to_ass_color",
         staticmethod(lambda value: f"ASS::{value}"),
@@ -760,9 +716,7 @@ def test_write_ass_file_should_use_expected_active_border_default_literal(
     assert "ASS::XX#000000XX" not in content
 
 
-def test_write_ass_file_should_keep_words_on_same_line_at_exact_threshold(
-    tmp_path, monkeypatch
-):
+def test_write_ass_file_should_keep_words_on_same_line_at_exact_threshold(tmp_path, monkeypatch):
     processor = SubtitleProcessor()
     output_file = tmp_path / "threshold-850.ass"
 
@@ -779,9 +733,7 @@ def test_write_ass_file_should_keep_words_on_same_line_at_exact_threshold(
     widths = {" ": 50, "W1": 300, "W2": 500}
     monkeypatch.setattr(processor, "_get_text_width", lambda text, _size: widths[text])
 
-    processor._write_ass_file(
-        _make_segment(["W1", "W2"], step_ms=500), str(output_file)
-    )
+    processor._write_ass_file(_make_segment(["W1", "W2"], step_ms=500), str(output_file))
     content = output_file.read_text(encoding="utf-8")
 
     assert "{\\an5\\pos(265,1050)}W1" in content
@@ -805,9 +757,7 @@ def test_write_ass_file_should_wrap_at_width_851(tmp_path, monkeypatch):
     widths = {" ": 50, "W1": 400, "W2": 401}
     monkeypatch.setattr(processor, "_get_text_width", lambda text, _size: widths[text])
 
-    processor._write_ass_file(
-        _make_segment(["W1", "W2"], step_ms=500), str(output_file)
-    )
+    processor._write_ass_file(_make_segment(["W1", "W2"], step_ms=500), str(output_file))
     content = output_file.read_text(encoding="utf-8")
 
     assert "{\\an5\\pos(540,999)}W1" in content
@@ -831,9 +781,7 @@ def test_write_ass_file_should_keep_state_after_line_wrap(tmp_path, monkeypatch)
     widths = {" ": 50, "W1": 400, "W2": 450, "W3": 100}
     monkeypatch.setattr(processor, "_get_text_width", lambda text, _size: widths[text])
 
-    processor._write_ass_file(
-        _make_segment(["W1", "W2", "W3"], step_ms=500), str(output_file)
-    )
+    processor._write_ass_file(_make_segment(["W1", "W2", "W3"], step_ms=500), str(output_file))
     content = output_file.read_text(encoding="utf-8")
 
     assert "{\\an5\\pos(540,999)}W1" in content

@@ -8,6 +8,9 @@ from src.infrastructure.subtitle_processor import SubtitleProcessor
 
 
 class FFmpegVideoProcessor(IVideoProcessor):
+    def __init__(self, subtitle_processor: SubtitleProcessor | None = None):
+        self.subtitle_processor = subtitle_processor or SubtitleProcessor()
+
     def generate_short(
         self,
         video: Video,
@@ -21,9 +24,11 @@ class FFmpegVideoProcessor(IVideoProcessor):
 
         # Process subtitles and get speaker segments
         ass_filepath = output_filepath.replace(".mp4", ".ass")
-        subtitle_processor = SubtitleProcessor()
-        subtitle_processor.process_subtitles(
-            video.subtitles_filepath, interval, ass_filepath
+        self.subtitle_processor.process_subtitles(
+            video.subtitles_filepath,
+            interval,
+            ass_filepath,
+            media_filepath=video.filepath,
         )
 
         stream = ffmpeg.input(video.filepath, ss=interval.start_seconds, t=duration)
@@ -69,9 +74,7 @@ class FFmpegVideoProcessor(IVideoProcessor):
         )
 
     @staticmethod
-    def _build_split_screen_video_stream(
-        source_video_stream, target_format: VideoFormat
-    ):
+    def _build_split_screen_video_stream(source_video_stream, target_format: VideoFormat):
         # Create two streams for left and right speakers
         split = source_video_stream.split()
         left = split[0]
