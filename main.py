@@ -10,9 +10,7 @@ from src.interfaces.cli_utils import resolve_outro_filepath
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Generate Shorts from a video with subtitles."
-    )
+    parser = argparse.ArgumentParser(description="Generate Shorts from a video with subtitles.")
     parser.add_argument(
         "--video",
         type=str,
@@ -74,9 +72,7 @@ def main():
 
     os.makedirs(args.output, exist_ok=True)
 
-    outro_filepath, outro_warning = resolve_outro_filepath(
-        enable_outro=args.enable_outro, outro_filepath=args.outro
-    )
+    outro_filepath, outro_warning = resolve_outro_filepath(enable_outro=args.enable_outro, outro_filepath=args.outro)
     if outro_warning:
         print(outro_warning)
 

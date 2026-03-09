@@ -34,6 +34,9 @@ class ConfigManager:
     def get_subtitle_setting(self, name: str, default: any) -> any:
         return self.config.get("subtitles", {}).get(name, default)
 
+    def get_alignment_setting(self, name: str, default: any) -> any:
+        return self.config.get("alignment", {}).get(name, default)
+
     @staticmethod
     def hex_to_ass_color(hex_color: str) -> str:
         """Converts #RRGGBB to &HBBGGRR& ASS format"""

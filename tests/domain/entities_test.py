@@ -13,9 +13,7 @@ def test_short_video_creation():
     interval = TimeInterval(start_seconds=10, end_seconds=20)
     fmt = VideoFormat.youtube_shorts()
 
-    short = ShortVideo(
-        filepath="short.mp4", original_video=original, interval=interval, format=fmt
-    )
+    short = ShortVideo(filepath="short.mp4", original_video=original, interval=interval, format=fmt)
 
     assert short.filepath == "short.mp4"
     assert short.original_video == original

@@ -32,6 +32,4 @@ def test_resolve_outro_filepath_enabled_and_missing(_mock_exists):
     )
 
     assert resolved_outro is None
-    assert warning_message == (
-        "Warning: Outro file not found: inputs/missing.mp4. Continuing without outro."
-    )
+    assert warning_message == ("Warning: Outro file not found: inputs/missing.mp4. Continuing without outro.")

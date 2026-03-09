@@ -1,0 +1,124 @@
+---
+title: Project Architecture
+config:
+  theme: base
+  look: classic
+  themeVariables:
+    background: "#fffdf8"
+    primaryColor: "#ffe2c6"
+    primaryBorderColor: "#c76731"
+    primaryTextColor: "#2c221c"
+    secondaryColor: "#d9f4e7"
+    tertiaryColor: "#dbefff"
+    lineColor: "#3258a8"
+    clusterBkg: "#fffaf2"
+    clusterBorder: "#8c7764"
+    mainBkg: "#fffefb"
+  themeCSS: |
+    .flowchart-link {
+      stroke-dasharray: 8 !important;
+      animation: line-flow 1.4s linear infinite !important;
+      stroke-width: 2.4px !important;
+    }
+    .cluster rect {
+      stroke-width: 2px !important;
+      rx: 10px;
+      ry: 10px;
+    }
+    .node rect, .node path, .node polygon, .node circle {
+      stroke-width: 2px !important;
+    }
+    @keyframes line-flow {
+      from { stroke-dashoffset: 18; }
+      to { stroke-dashoffset: 0; }
+    }
+---
+flowchart TB
+    CLI["CLI<br/>main.py"]:::delivery
+
+    subgraph APP["Application"]
+        UC["GenerateShortUseCase"]:::app
+    end
+
+    subgraph DOMAIN["Domain"]
+        PORT["IVideoProcessor"]:::domain
+        ENT["Video / ShortVideo"]:::domain
+        VO["TimeInterval / VideoFormat"]:::domain
+        MODELS["SubtitleCue / AlignedWord /<br/>ReconciledCue"]:::domain
+    end
+
+    subgraph INFRA["Infrastructure"]
+        FFMPEG["FFmpegVideoProcessor"]:::infra
+        SUB["SubtitleProcessor<br/>facade"]:::infra
+        PARSER["SubtitleParser"]:::infra
+        ALIGN["FasterWhisperWordAligner"]:::infra
+        CACHE["AlignmentCache<br/>raw_asr + reconciled"]:::infra
+        REC["TranscriptReconciler"]:::infra
+        APPROX["ApproximateWordAligner"]:::infra
+        PROJ["IntervalSubtitleProjector"]:::infra
+        ASS["AssWriter"]:::infra
+        CFG["ConfigManager"]:::infra
+    end
+
+    MEDIA[("Source video/audio")]:::artifact
+    CACHEFS[("outputs/.cache/<br/>subtitle_alignment")]:::artifact
+    ASSFILE[("short_N.ass")]:::artifact
+
+    CLI e1@--> UC
+    UC e2@--> PORT
+    UC e3@--> ENT
+    UC e4@--> VO
+
+    FFMPEG e5@-.-> PORT
+    FFMPEG e6@--> SUB
+    FFMPEG e7@--> ENT
+    FFMPEG e8@--> VO
+
+    SUB e9@--> PARSER
+    SUB e10@--> ALIGN
+    SUB e11@--> CACHE
+    SUB e12@--> REC
+    SUB e13@--> PROJ
+    SUB e14@--> ASS
+    SUB e15@--> APPROX
+    SUB e16@--> CFG
+
+    PARSER e17@--> MODELS
+    ALIGN e18@--> MODELS
+    REC e19@--> MODELS
+    PROJ e20@--> VO
+    ALIGN e21@--> MEDIA
+    CACHE e22@--> CACHEFS
+    ASS e23@--> ASSFILE
+    ASS e24@--> CFG
+
+    e1@{ animate: true }
+    e2@{ animate: true }
+    e3@{ animate: true }
+    e4@{ animate: true }
+    e5@{ animate: true }
+    e6@{ animate: true }
+    e7@{ animate: true }
+    e8@{ animate: true }
+    e9@{ animate: true }
+    e10@{ animate: true }
+    e11@{ animate: true }
+    e12@{ animate: true }
+    e13@{ animate: true }
+    e14@{ animate: true }
+    e15@{ animate: true }
+    e16@{ animate: true }
+    e17@{ animate: true }
+    e18@{ animate: true }
+    e19@{ animate: true }
+    e20@{ animate: true }
+    e21@{ animate: true }
+    e22@{ animate: true }
+    e23@{ animate: true }
+    e24@{ animate: true }
+
+    classDef delivery fill:#ffd7c2,stroke:#b45622,color:#24150c
+    classDef app fill:#d9e9ff,stroke:#355e9b,color:#142033
+    classDef domain fill:#f6d9ef,stroke:#934f83,color:#2a1324
+    classDef infra fill:#d9f4e7,stroke:#2f7b5f,color:#10281f
+    classDef artifact fill:#fff3bf,stroke:#9d7d00,color:#2a2200

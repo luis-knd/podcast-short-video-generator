@@ -1,0 +1,104 @@
+---
+title: Sequence Flow for Alignment-Aware Short Generation
+config:
+  theme: base
+  look: classic
+  themeVariables:
+    background: "#fffdf8"
+    actorBkg: "#fff6de"
+    actorBorder: "#a77705"
+    actorTextColor: "#2d2000"
+    signalColor: "#2f62c9"
+    signalTextColor: "#20324f"
+    labelBoxBkgColor: "#e7f0ff"
+    labelBoxBorderColor: "#3963a3"
+    loopTextColor: "#284b8f"
+    noteBkgColor: "#fff7e8"
+    noteBorderColor: "#b15b2f"
+    activationBkgColor: "#dff5ea"
+    activationBorderColor: "#2f7b5f"
+  themeCSS: |
+    .actor {
+      animation: pulse-actor 2.2s infinite alternate !important;
+      stroke-width: 2px !important;
+    }
+    .messageLine0, .messageLine1 {
+      stroke-dasharray: 8 !important;
+      animation: line-flow 1.2s linear infinite !important;
+      stroke-width: 2.2px !important;
+    }
+    .noteText, .loopText {
+      font-weight: 700 !important;
+    }
+    @keyframes pulse-actor {
+      from { fill: #fffdf8; stroke: #a77705; }
+      to { fill: #ffe8b3; stroke: #b15b2f; }
+    }
+    @keyframes line-flow {
+      from { stroke-dashoffset: 18; }
+      to { stroke-dashoffset: 0; }
+    }
+---
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant CLI as main.py CLI
+    participant UC as GenerateShortUseCase
+    participant VP as FFmpegVideoProcessor
+    participant SP as SubtitleProcessor
+    participant C as AlignmentCache
+    participant FW as FasterWhisperWordAligner
+    participant R as TranscriptReconciler
+    participant AW as ApproximateWordAligner
+    participant ASS as AssWriter
+    participant FF as ffmpeg
+
+    U->>+CLI: Run generator with video, subtitles and intervals
+    CLI->>+UC: execute(video, subs, intervals, output)
+    loop for each interval
+        UC->>+VP: generate_short(video, interval, format, output)
+        VP->>+SP: process_subtitles(srt, interval, ass, media)
+        Note over SP: Parse cues and decide alignment mode
+        alt alignment enabled and media path available
+            SP->>C: load_raw(raw_key)
+            alt raw_asr cache hit
+                C-->>SP: raw ASR words
+            else raw_asr cache miss
+                C-->>SP: cache miss
+                SP->>FW: align(full source media)
+                FW-->>SP: raw ASR words + metadata
+                SP->>C: save_raw(raw_key, payload)
+                C-->>SP: persisted
+            end
+            SP->>C: load_reconciled(reconciled_key)
+            alt reconciled cache hit
+                C-->>SP: reconciled cues
+            else reconciled cache miss
+                C-->>SP: cache miss
+                SP->>R: reconcile(cues, aligned_words)
+                alt reconciliation quality is acceptable
+                    R-->>SP: reconciled cues + quality
+                    SP->>C: save_reconciled(key, payload)
+                    C-->>SP: persisted
+                else quality too low or matching fails
+                    R-->>SP: low-confidence result
+                    SP->>AW: build approximate cues
+                    AW-->>SP: approximate cues
+                end
+            end
+        else alignment disabled or unavailable
+            SP->>AW: build approximate cues
+            AW-->>SP: approximate cues
+        end
+        SP->>ASS: write(segments, short_N.ass)
+        ASS-->>SP: .ass written
+        SP-->>-VP: subtitle file ready
+        VP->>+FF: render split-screen and burn ASS
+        alt outro enabled
+            FF-->>FF: append outro with fades
+        end
+        FF-->>-VP: short_N.mp4
+        VP-->>-UC: ShortVideo
+    end
+    UC-->>-CLI: generated shorts list
+    CLI-->>-U: print output paths

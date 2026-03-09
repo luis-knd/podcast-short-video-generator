@@ -1,297 +1,224 @@
-import re
 from typing import Any
 
+# fmt: off
+# isort: off
+from src.domain.subtitle_models import (
+    AlignedWord,
+    ReconciledCue,
+    ReconciledWord,
+)
 from src.domain.value_objects import TimeInterval
+from src.infrastructure.config import ConfigManager
+from src.infrastructure.subtitles import (
+    AlignmentCache,
+    ApproximateWordAligner,
+    AssWriter,
+    FasterWhisperWordAligner,
+    IntervalSubtitleProjector,
+    SubtitleParser,
+    TranscriptReconciler,
+)
+# isort: on
+# fmt: on
 
 
 class SubtitleProcessor:
-    def __init__(self):
-        pass
+    def __init__(
+        self,
+        subtitle_parser: SubtitleParser | None = None,
+        ass_writer: AssWriter | None = None,
+        approximate_aligner: ApproximateWordAligner | None = None,
+        projector: IntervalSubtitleProjector | None = None,
+        reconciler: TranscriptReconciler | None = None,
+    ):
+        self.subtitle_parser = subtitle_parser or SubtitleParser()
+        self.ass_writer = ass_writer or AssWriter()
+        self.approximate_aligner = approximate_aligner or ApproximateWordAligner()
+        self.projector = projector or IntervalSubtitleProjector()
+        self.reconciler = reconciler or TranscriptReconciler()
 
     @staticmethod
     def _parse_time_to_ms(time_str: str) -> int:
-        """Parses SRT time format 00:00:00,000 to milliseconds."""
-        time_str = time_str.strip()
-        h, m, s_ms = time_str.split(":")
-        s, ms = s_ms.split(",")
-        return int(h) * 3600000 + int(m) * 60000 + int(s) * 1000 + int(ms)
+        return SubtitleParser.parse_time_to_ms(time_str)
 
     @staticmethod
     def _format_ms_to_ass_time(ms: int) -> str:
-        """Formats milliseconds to ASS time format H:MM:SS.cs"""
-        ms = int(ms)
-        h = ms // 3600000
-        ms %= 3600000
-        m = ms // 60000
-        ms %= 60000
-        s = ms // 1000
-        cs = (ms % 1000) // 10  # Centiseconds
-        return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+        return AssWriter.format_ms_to_ass_time(ms)
 
     @staticmethod
-    def _calculate_chunk_times(
-        chunks: list[str], start_ms: int, end_ms: int
-    ) -> list[dict[str, Any]]:
-        """Calculates proportionally distributed start/end times for words based on chunk length."""
-        total_duration = end_ms - start_ms
-        total_words = sum(len(c.split()) for c in chunks)
-
-        if total_words == 0:
-            return []
-
-        time_per_word = total_duration / total_words
-
-        timed_chunks = []
-        current_time = start_ms
-
-        for chunk in chunks:
-            word_count = len(chunk.split())
-            chunk_duration = int(word_count * time_per_word)
-            timed_chunks.append(
-                {
-                    "text": chunk,
-                    "start": int(current_time),
-                    "end": int(current_time + chunk_duration),
-                }
-            )
-            current_time += chunk_duration
-
-        return timed_chunks
+    def _calculate_chunk_times(chunks: list[str], start_ms: int, end_ms: int) -> list[dict[str, Any]]:
+        return ApproximateWordAligner.calculate_chunk_times(chunks, start_ms, end_ms)
 
     @staticmethod
     def _get_text_width(text: str, font_size: int) -> int:
-        """Approximates the pixel width of a string based on font size."""
-        width = 0
-        base_char_width = int(font_size * 0.48)
-        for char in text:
-            if char == " ":
-                width += int(font_size * 0.25)
-            elif char in "il1!.,;:|":
-                width += int(base_char_width * 0.4)
-            elif char in "wmWM":
-                width += int(base_char_width * 1.5)
-            elif char in "tfjI":
-                width += int(base_char_width * 0.6)
-            elif char.isupper():
-                width += int(base_char_width * 1.1)
-            else:
-                width += base_char_width
-        return width
+        return AssWriter.get_text_width(text, font_size)
 
     @staticmethod
-    def _group_into_phrases(
-        words: list[str], words_per_phrase: int = 4
-    ) -> list[list[str]]:
-        phrases = []
-        for i in range(0, len(words), words_per_phrase):
-            phrases.append(words[i : i + words_per_phrase])
-        return phrases
+    def _group_into_phrases(words: list[str], words_per_phrase: int = 4) -> list[list[str]]:
+        return IntervalSubtitleProjector.group_into_phrases(words, words_per_phrase=words_per_phrase)
 
     def process_subtitles(
-        self, srt_filepath: str, interval: TimeInterval, output_ass_filepath: str
+        self,
+        srt_filepath: str,
+        interval: TimeInterval,
+        output_ass_filepath: str,
+        media_filepath: str | None = None,
     ) -> list[dict[str, Any]]:
-        """
-        Parses an SRT file, filters for a time interval, shifts times,
-        groups into phrases, and generates progressive karaoke ASS.
-        """
-        interval_start_ms = interval.start_seconds * 1000
-        interval_end_ms = interval.end_seconds * 1000
-
-        with open(srt_filepath, encoding="utf-8") as f:
-            content = f.read()
-
-        blocks = content.strip().split("\n\n")
-        segments = []
-
-        for block in blocks:
-            lines = block.split("\n")
-            if len(lines) < 3:
-                continue
-
-            time_line = lines[1]
-            text_lines = lines[2:]
-            text = " ".join(text_lines)
-
-            # Parse time
-            match = re.search(
-                r"(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})", time_line
-            )
-            if not match:
-                continue
-
-            start_ms = self._parse_time_to_ms(match.group(1))
-            end_ms = self._parse_time_to_ms(match.group(2))
-
-            # Filter by interval
-            if end_ms <= interval_start_ms or start_ms >= interval_end_ms:
-                continue
-
-            # Parse speaker
-            speaker = "Speaker Unknown"
-            speaker_match = re.match(r"^(Speaker \d+):?\s*(.*)", text)
-            if speaker_match:
-                speaker = speaker_match.group(1)
-                text = speaker_match.group(2).strip()
-
-            # Shift time to be relative to the start of the short
-            words = text.split()
-            if not words:
-                continue
-
-            word_times = self._calculate_chunk_times(words, start_ms, end_ms)
-
-            valid_word_times = []
-            for wt in word_times:
-                w_start = wt["start"] - interval_start_ms
-                w_end = wt["end"] - interval_start_ms
-
-                if w_end <= 0 or w_start >= (interval_end_ms - interval_start_ms):
-                    continue
-
-                wt["start"] = max(0, w_start)
-                wt["end"] = min(interval_end_ms - interval_start_ms, w_end)
-                valid_word_times.append(wt)
-
-            if not valid_word_times:
-                continue
-
-            valid_words = [wt["text"] for wt in valid_word_times]
-            phrases = self._group_into_phrases(valid_words, words_per_phrase=6)
-
-            word_idx = 0
-            for phrase_words in phrases:
-                phrase_word_times = valid_word_times[
-                    word_idx : word_idx + len(phrase_words)
-                ]
-                word_idx += len(phrase_words)
-
-                phrase_start = phrase_word_times[0]["start"]
-                phrase_end = phrase_word_times[-1]["end"]
-                phrase_text = " ".join(phrase_words)
-
-                segments.append(
-                    {
-                        "speaker": speaker,
-                        "phrase_text": phrase_text,
-                        "start_ms": phrase_start,
-                        "end_ms": phrase_end,
-                        "words": phrase_word_times,
-                    }
-                )
-
+        cues = self.subtitle_parser.parse(srt_filepath)
+        timed_cues = self._resolve_timed_cues(
+            cues=cues,
+            interval=interval,
+            srt_filepath=srt_filepath,
+            output_ass_filepath=output_ass_filepath,
+            media_filepath=media_filepath,
+        )
+        segments = self.projector.project(timed_cues, interval, words_per_phrase=6)
         self._write_ass_file(segments, output_ass_filepath)
         return segments
 
-    def _write_ass_file(self, segments: list[dict[str, Any]], output_filepath: str):
-        """Generates progressive word-by-word karaoke ASS."""
-        import random
+    def _resolve_timed_cues(
+        self,
+        cues,
+        interval: TimeInterval,
+        srt_filepath: str,
+        output_ass_filepath: str,
+        media_filepath: str | None,
+    ) -> list[ReconciledCue]:
+        if not cues:
+            return []
 
-        from src.infrastructure.config import ConfigManager
+        if not self._should_use_alignment(media_filepath):
+            return self._build_approximate_cues(cues, interval)
+
+        cache = AlignmentCache.from_output_filepath(output_ass_filepath)
+        aligner = self._build_word_aligner()
+        if aligner is None:
+            return self._build_approximate_cues(cues, interval)
+
+        try:
+            raw_key = cache.build_raw_key(
+                media_filepath=media_filepath,
+                aligner_name=aligner.aligner_name,
+                model_name=aligner.model_size,
+                compute_type=aligner.compute_type,
+                language=aligner.language,
+            )
+            raw_payload = cache.load_raw(raw_key)
+            if raw_payload is None:
+                raw_payload = aligner.align(media_filepath)
+                cache.save_raw(raw_key, raw_payload)
+
+            aligned_words = self._deserialize_aligned_words(raw_payload.get("words", []))
+            if not aligned_words:
+                return self._build_approximate_cues(cues, interval)
+
+            reconciled_key = cache.build_reconciled_key(
+                subtitle_filepath=srt_filepath,
+                raw_key=raw_key,
+                reconciliation_version=self.reconciler.version,
+            )
+            reconciled_payload = cache.load_reconciled(reconciled_key)
+            if reconciled_payload is None:
+                reconciled_cues, quality = self.reconciler.reconcile(cues, aligned_words)
+                reconciled_payload = {
+                    "quality": quality,
+                    "cues": [cue.to_dict() for cue in reconciled_cues],
+                    "raw_key": raw_key,
+                }
+                cache.save_reconciled(reconciled_key, reconciled_payload)
+            return self._deserialize_reconciled_cues(reconciled_payload.get("cues", []))
+        except (
+            AttributeError,
+            ImportError,
+            KeyError,
+            OSError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+        ):
+            return self._build_approximate_cues(cues, interval)
+
+    @staticmethod
+    def _should_use_alignment(media_filepath: str | None) -> bool:
+        if not media_filepath:
+            return False
 
         config = ConfigManager()
-        font_name = config.get_subtitle_setting("font_name", "Montserrat")
-        font_size = config.get_subtitle_setting("font_size", 85)
-        base_color = ConfigManager.hex_to_ass_color(
-            config.get_subtitle_setting("base_color_hex", "#FFFFFF")
+        return bool(config.get_alignment_setting("enabled", True))
+
+    @staticmethod
+    def _build_word_aligner() -> FasterWhisperWordAligner | None:
+        config = ConfigManager()
+        backend = config.get_alignment_setting("backend", "faster_whisper")
+        if backend != "faster_whisper":
+            return None
+
+        return FasterWhisperWordAligner(
+            model_size=config.get_alignment_setting("model_size", "base"),
+            compute_type=config.get_alignment_setting("compute_type", "int8"),
+            language=config.get_alignment_setting("language", None),
+            beam_size=config.get_alignment_setting("beam_size", 5),
+            vad_filter=config.get_alignment_setting("vad_filter", True),
         )
 
-        # Get brand colors array
-        brand_colors = config.get_brand_colors()
-        if not brand_colors:
-            brand_colors = ["#26f4ff", "#e61b8e", "#d1ff02"]
-        ass_colors = [ConfigManager.hex_to_ass_color(c) for c in brand_colors]
-        default_active_color = ass_colors[0] if ass_colors else "&HFFFFFF&"
-        active_border = ConfigManager.hex_to_ass_color(
-            config.get_subtitle_setting("active_border_color_hex", "#000000")
+    def _build_approximate_cues(self, cues, interval: TimeInterval) -> list[ReconciledCue]:
+        reconciled_cues: list[ReconciledCue] = []
+        interval_start_ms = int(interval.start_seconds * 1000)
+        interval_end_ms = int(interval.end_seconds * 1000)
+        for cue in cues:
+            if cue.end_ms <= interval_start_ms or cue.start_ms >= interval_end_ms:
+                continue
+
+            timed_words = self._calculate_chunk_times(list(cue.words), cue.start_ms, cue.end_ms)
+            if not timed_words:
+                continue
+
+            reconciled_words = tuple(
+                ReconciledWord(
+                    display_text=str(word_payload["text"]),
+                    start_ms=int(word_payload["start"]),
+                    end_ms=int(word_payload["end"]),
+                    confidence=0.0,
+                    source="approximate",
+                    match_method="approximate",
+                    fallback_used=True,
+                )
+                for word_payload in timed_words
+            )
+
+            reconciled_cues.append(
+                ReconciledCue(
+                    cue_id=cue.cue_id,
+                    speaker=cue.speaker,
+                    original_text=cue.text,
+                    source_cue_start_ms=cue.start_ms,
+                    source_cue_end_ms=cue.end_ms,
+                    timing_mode="approximate",
+                    quality_score=0.0,
+                    words=reconciled_words,
+                )
+            )
+
+        return reconciled_cues
+
+    @staticmethod
+    def _deserialize_aligned_words(payload: object) -> list[AlignedWord]:
+        if not isinstance(payload, list):
+            return []
+
+        return [AlignedWord.from_dict(item) for item in payload if isinstance(item, dict)]
+
+    @staticmethod
+    def _deserialize_reconciled_cues(payload: object) -> list[ReconciledCue]:
+        if not isinstance(payload, list):
+            return []
+
+        return [ReconciledCue.from_dict(item) for item in payload if isinstance(item, dict)]
+
+    def _write_ass_file(self, segments: list[dict[str, Any]], output_filepath: str):
+        self.ass_writer.write(
+            segments,
+            output_filepath,
+            format_time=self._format_ms_to_ass_time,
+            get_text_width=self._get_text_width,
         )
-        y_pos = config.get_subtitle_setting("y_position", 1050)
-
-        ass_header = (
-            "[Script Info]\n"
-            "ScriptType: v4.00+\n"
-            "PlayResX: 1080\n"
-            "PlayResY: 1920\n"
-            "\n"
-            "[V4+ Styles]\n"
-            "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, "
-            "BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, "
-            "BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
-            f"Style: BaseLayer,{font_name},{font_size},{base_color},"
-            f"&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,6,3,5,10,10,250,1\n"
-            f"Style: ActiveLayer,{font_name},{font_size},{default_active_color},"
-            f"&H000000FF,{active_border},&H80000000,-1,0,0,0,100,100,0,0,1,8,3,5,10,10,250,1\n"
-            "\n"
-            "[Events]\n"
-            "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
-        )
-
-        with open(output_filepath, "w", encoding="utf-8") as f:
-            f.write(ass_header)
-
-            for segment in segments:
-                phrase_start = self._format_ms_to_ass_time(segment["start_ms"])
-                phrase_end = self._format_ms_to_ass_time(segment["end_ms"])
-
-                # Calculate phrase width to center it appropriately
-                space_width = self._get_text_width(" ", font_size)
-                max_width = 850
-                lines = []
-                current_line = []
-                current_line_width = 0
-
-                for w in segment["words"]:
-                    w_text = w["text"]
-                    word_width = self._get_text_width(w_text, font_size)
-
-                    if (
-                        current_line_width + space_width + word_width > max_width
-                        and current_line
-                    ):
-                        lines.append(current_line)
-                        current_line = [w]
-                        current_line_width = word_width
-                    else:
-                        current_line.append(w)
-                        if current_line_width == 0:
-                            current_line_width = word_width
-                        else:
-                            current_line_width += space_width + word_width
-
-                if current_line:
-                    lines.append(current_line)
-
-                num_lines = len(lines)
-                line_height = int(font_size * 1.2)
-                start_y = y_pos - (line_height * (num_lines - 1)) / 2
-
-                for i, line_words in enumerate(lines):
-                    line_y = int(start_y + i * line_height)
-                    line_width = sum(
-                        self._get_text_width(w["text"], font_size) for w in line_words
-                    ) + space_width * (len(line_words) - 1)
-                    current_x = 540 - (line_width / 2)
-
-                    for w in line_words:
-                        w_start = self._format_ms_to_ass_time(w["start"])
-                        w_end = self._format_ms_to_ass_time(w["end"])
-                        w_text = w["text"]
-
-                        word_width = self._get_text_width(w_text, font_size)
-                        center_x = int(current_x + (word_width / 2))
-
-                        # Layer 0: Static grey base word (lives for the entire phrase duration)
-                        f.write(
-                            f"Dialogue: 0,{phrase_start},{phrase_end},"
-                            f"BaseLayer,,0,0,0,,"
-                            f"{{\\an5\\pos({center_x},{line_y})}}{w_text}\n"
-                        )
-
-                        random_color = random.choice(ass_colors)
-                        # Layer 1: Active word pop-in and glow overlays (lives only while the word is spoken)
-                        f.write(
-                            f"Dialogue: 1,{w_start},{w_end},ActiveLayer,,0,0,0,,"
-                            f"{{\\c{random_color}\\an5\\pos({center_x},{line_y})"
-                            f"\\t(0,120,\\fscx120\\fscy120)}}{w_text}\n"
-                        )
-
-                        current_x += word_width + space_width

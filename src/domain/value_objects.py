@@ -30,9 +30,7 @@ class TimeInterval:
         except (ValueError, DomainError) as e:
             if "Start time" in str(e) or "End time" in str(e):
                 raise
-            raise DomainError(
-                f"Invalid time format: {time_str}. Expected 'MM:SS - MM:SS'"
-            ) from e
+            raise DomainError(f"Invalid time format: {time_str}. Expected 'MM:SS - MM:SS'") from e
 
     @staticmethod
     def _parse_time(time_str: str) -> float:
@@ -56,9 +54,7 @@ class VideoFormat:
         if self.width <= 0 or self.height <= 0:
             raise DomainError("Width and height must be positive")
         if abs(self.aspect_ratio - (9 / 16)) > 0.01:
-            raise DomainError(
-                "Video format must have a 9:16 aspect ratio for YouTube Shorts"
-            )
+            raise DomainError("Video format must have a 9:16 aspect ratio for YouTube Shorts")
 
     @property
     def aspect_ratio(self) -> float:

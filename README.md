@@ -15,6 +15,9 @@ generar videos verticales en formato de YouTube Shorts utilizando intervalos de 
 y las apila verticalmente para llenar el formato 9:16.
 - **Subtítulos estilo Karaoke Progresivo**: Genera subtítulos dinámicos donde las palabras se resplandecen de manera
 secuencial de acuerdo al audio.
+- **Alineación Real de Palabras**: Usa `faster-whisper` para obtener timestamps por palabra cuando está disponible,
+reutiliza caché local en dos niveles (`raw_asr` + `reconciled`) y mantiene fallback al timing aproximado si la
+alineación falla o no es confiable.
 
 Está construida nativamente en Python utilizando los principios de **Diseño Orientado al Dominio (DDD)** y **Desarrollo
 Guiado por Pruebas (TDD)**.
@@ -32,19 +35,21 @@ Guiado por Pruebas (TDD)**.
    - [Ejecutar el Generador](#ejecutar-el-generador)
 4. [Arquitectura del Proyecto](#arquitectura-del-proyecto)
 5. [Flujo de Ejecución (Diagrama de Uso)](#flujo-de-ejecución-diagrama-de-uso)
-6. [Desarrollo y Pruebas](#desarrollo-y-pruebas)
+6. [Flujo de Ejecución (Diagrama de Secuencia)](#flujo-de-ejecución-diagrama-de-secuencia)
+7. [Desarrollo y Pruebas](#desarrollo-y-pruebas)
    - [Pruebas Unitarias](#pruebas-unitarias)
    - [Pruebas de Mutación](#pruebas-de-mutación)
-7. [Contribución (Linting y Segurización)](#contribución-linting-y-segurización)
+8. [Contribución (Linting y Segurización)](#contribución-linting-y-segurización)
    - [Cómo Contribuir](#cómo-contribuir)
-8. [Licencia](#licencia)
+9. [Licencia](#licencia)
 
 ---
 
 ## Requisitos previos
 
-- Python 3.10+
-- `ffmpeg` instalado a nivel de sistema (Requisito indispensable para `ffmpeg-python`).
+- Python 3.10+ para la ejecucion del generador.
+- Python 3.11 o 3.12 recomendado si quieres correr toda la bateria de calidad local, especialmente `mutmut`.
+- `ffmpeg` instalado a nivel de sistema (requisito indispensable para `ffmpeg-python`).
 
 ## Instalación y Configuración
 
@@ -78,6 +83,37 @@ el sistema operativo.
    pip install -r requirements.txt
    ```
 
+   `requirements.txt` incluye tanto las dependencias de runtime como las de calidad usadas por CI:
+   `faster-whisper`, `pytest`, `pytest-cov`, `mutmut`, `vulture` y `pylint`.
+
+### Alineación palabra-audio
+
+El pipeline de subtítulos intenta alinear palabras sobre el media original antes de generar el `.ass` karaoke.
+
+- Si `faster-whisper` está disponible y la alineación es válida, el sistema usa timings reconciliados con el SRT.
+- Si la alineación falla, no hay dependencia instalada o la calidad es baja, el proceso vuelve automáticamente al
+  cálculo aproximado actual.
+- La primera alineación de un media puede tardar más porque `faster-whisper` necesita cargar el modelo y generar el
+  ASR bruto del archivo completo.
+- La caché se guarda junto al output:
+
+```text
+outputs/.cache/subtitle_alignment/
+├── raw_asr/
+└── reconciled/
+```
+
+`raw_asr/` almacena el ASR bruto del media completo. `reconciled/` almacena el resultado derivado de reconciliar ese
+ASR con el subtítulo original. Así se evita recalcular tanto la transcripción como el matching en ejecuciones
+repetidas del mismo source media.
+
+La invalidez de caché ocurre de forma automática si cambia alguno de estos fingerprints:
+
+- media source (`path`, `size_bytes`, `mtime_ns`)
+- archivo de subtítulos (`path`, `size_bytes`, `mtime_ns`, `sha256`)
+- backend/modelo/configuración de alineación
+- versión de reconciliación
+
 ---
 
 ## Uso del Aplicativo
@@ -110,6 +146,13 @@ generados:
 ```json
 {
   "brand_colors": ["#e61b8e", "#d1ff02", "#26f4ff", "#ffe81f"],
+  "alignment": {
+    "backend": "faster_whisper",
+    "compute_type": "int8",
+    "enabled": true,
+    "model_size": "base",
+    "vad_filter": true
+  },
   "subtitles": {
     "active_border_color_hex": "#000000",
     "base_border_color_hex": "#000000",
@@ -123,6 +166,12 @@ generados:
 
 - **`brand_colors`**: Una lista de colores (en formato Hex) que se utilizarán aleatoriamente para iluminar las palabras
 a medida que se pronuncian en el modo "karaoke".
+- **`alignment`**:
+  - `backend`: Backend de alineación. MVP: `faster_whisper`.
+  - `compute_type`: Modo de cómputo del backend.
+  - `enabled`: Activa o desactiva la alineación real.
+  - `model_size`: Tamaño del modelo ASR.
+  - `vad_filter`: Activa filtrado de voz antes del cálculo de timestamps.
 - **`subtitles`**:
   - `base_color_hex`: El color base inactivo del texto.
   - `font_name`: El nombre de la fuente tipográfica a utilizar.
@@ -180,6 +229,17 @@ python main.py \
   --fade-duration 0.7
 ```
 
+Para ejecutar el flujo completo con los archivos por defecto del repo, usando sincronización real por palabra con
+`faster-whisper` (si `config.json` mantiene `alignment.enabled=true` y `backend=faster_whisper`) y outro con fade de
+`0.6` segundos:
+
+```bash
+python main.py \
+  --enable-outro \
+  --outro inputs/outroShort.mp4 \
+  --fade-duration 0.6
+```
+
 #### Argumentos:
 
 - `--video`: (Opcional) Ruta al video horizontal base (por defecto: `inputs/video.mp4`).
@@ -207,14 +267,28 @@ El proyecto sigue la metodología **Clean Architecture**, dividiendo responsabil
 
 ![Arquitectura del Proyecto](docs/architecture.svg)
 
+Fuente Mermaid: `docs/architecture.mmd`
+
 - **Capa de Dominio (`src/domain`)**: Contiene las Entidades (`Video`, `ShortVideo`), los Objetos de Valor
-(`TimeInterval`, `VideoFormat`) y las Interfaces (`IVideoProcessor`).
+(`TimeInterval`, `VideoFormat`), las Interfaces (`IVideoProcessor`) y los modelos inmutables de subtítulos
+(`SubtitleCue`, `AlignedWord`, `ReconciledWord`, `ReconciledCue`).
 - **Capa de Aplicación (`src/application`)**: Contiene el Caso de Uso principal `GenerateShortUseCase` encargado de la
 orquestación.
 - **Capa de Infraestructura (`src/infrastructure`)**: Implementa `FFmpegVideoProcessor` acoplándose a `ffmpeg-python`,
-`SubtitleProcessor` para el modelado en formato `.ass` de los subtítulos dinámicos, y él `ConfigManager` para
-administrar `config.json`.
+`SubtitleProcessor` como facade del pipeline de subtítulos, `ConfigManager` para administrar `config.json` y el paquete
+`src/infrastructure/subtitles/` con componentes desacoplados para parseo, alineación, reconciliación, proyección por
+intervalo, caché en dos niveles y escritura del `.ass`.
 - **Interfaces (`main.py`)**: Valida argumentos y llama al caso de uso inyectando las dependencias.
+
+El pipeline de subtítulos ahora queda separado en responsabilidades estables:
+
+- `SubtitleParser`: parsea el SRT hacia cues de dominio.
+- `FasterWhisperWordAligner`: genera word timestamps reales sobre el media completo.
+- `AlignmentCache`: persiste `raw_asr` y `reconciled`.
+- `TranscriptReconciler`: preserva el texto del subtítulo original y le asigna timing real cuando la calidad lo permite.
+- `ApproximateWordAligner`: fallback explicito si la alineación falla o no es confiable.
+- `IntervalSubtitleProjector`: recorta y desplaza tiempos al intervalo del short.
+- `AssWriter`: mantiene el render karaoke en `.ass`.
 
 ---
 
@@ -225,6 +299,20 @@ para generar el output de forma escalonada e independiente.
 
 ![Flujo de Uso](docs/usage.svg)
 
+Fuente Mermaid: `docs/usage.mmd`
+
+---
+
+## Flujo de Ejecución (Diagrama de Secuencia)
+
+Este diagrama enfatiza el orden temporal entre la CLI, el caso de uso, el pipeline de subtítulos, la caché de
+alineación y el render final. Es la vista más útil para entender cuándo se reutiliza `raw_asr`, cuándo se reconcilia y
+cuándo se activa el fallback aproximado.
+
+![Flujo de Secuencia](docs/usage-sequence.svg)
+
+Fuente Mermaid: `docs/usage-sequence.mmd`
+
 ---
 
 ## Desarrollo y Pruebas
@@ -234,10 +322,10 @@ máxima calidad sobre las validaciones de tiempo y escalabilidad.
 
 ### Pruebas Unitarias
 
-Para correr los tests unitarios (asegúrate de tener el entorno virtual activo):
+Para correr la suite unitaria con el mismo gate principal que usa CI:
 
 ```bash
-pytest tests/ -v
+pytest tests/ --cov=src --cov-report=term-missing --cov-branch --cov-fail-under=90
 ```
 
 ### Pruebas de Mutación
@@ -255,10 +343,11 @@ cambio, el mutante ha sido "asesinado" (lo cual es bueno). Si el test pasa a pes
 1. **Ejecutar el análisis de mutación** (esto puede tardar varios minutos):
 
    ```bash
-   mutmut run
+   mutmut run --CI --no-progress --simple-output
    ```
 
-   _Nota: Durante la ejecución verás cuántos mutantes han sido eliminados (🎉), sobrevivido (🙁) o son sospechosos (🤔).
+   _Nota:_ `mutmut<3` no es estable en Python 3.14. Para correr esta validación localmente se recomienda un entorno
+   con Python 3.11 o 3.12, o delegar la corrida completa al workflow de CI.
 
 2. **Generar el reporte visual (HTML)**:
    Una vez terminada la ejecución, genera un reporte legible:
@@ -271,6 +360,22 @@ cambio, el mutante ha sido "asesinado" (lo cual es bueno). Si el test pasa a pes
    El comando anterior crea una carpeta llamada `html/` en la raíz del proyecto. Para ver el reporte detallado, abre el
 archivo:
    - **`html/index.html`** en tu navegador favorito.
+
+### Calidad estática
+
+Los checks adicionales del repo que también se ejecutan en CI son:
+
+```bash
+vulture src --min-confidence 80
+pylint src tests --disable=all --enable=duplicate-code --min-similarity-lines=12
+pre-commit run --all-files
+```
+
+El hook local `branch-name-check` exige ramas con este patrón:
+
+```text
+feature/EWS-<ticket>-descripcion-corta
+```
 
 ---
 
@@ -295,16 +400,23 @@ Las herramientas integradas incluyen:
 - **Black**: Para el formateo automático del código.
 - **Ruff**: Como linter rápido y moderno de Python.
 - **Isort**: Para ordenar las importaciones.
+- **Pylint (`no-self-use`)**: Para detectar métodos que pueden ser estáticos.
+- **Vulture**: Para detectar código muerto.
 - **Detect-secrets**: Para prevenir commits con contraseñas o claves expuestas.
+- **Branch name check**: Para forzar el patrón de naming compatible con los workflows del repo.
 
 ### Cómo Contribuir
 
 ¡Las contribuciones son bienvenidas! Sigue estos pasos para colaborar:
 
 1. Haz un **Fork** del repositorio.
-2. Crea una rama para tu nueva característica o solución: `git checkout -b feature/nueva-caracteristica`.
-3. Asegúrate de ejecutar los tests (`pytest`) y que tu código cumpla con los estándares configurados (se validarán
-automáticamente si instalaste `pre-commit`).
+2. Crea una rama para tu nueva característica o solución siguiendo el patrón del repo:
+   `git checkout -b feature/EWS-<ticket>-descripcion-corta`.
+3. Asegúrate de ejecutar al menos:
+   - `pytest tests/ --cov=src --cov-report=term-missing --cov-branch --cov-fail-under=90`
+   - `pre-commit run --all-files`
+   - `vulture src --min-confidence 80`
+   - `pylint src tests --disable=all --enable=duplicate-code --min-similarity-lines=12`
 4. Haz tus commits describiendo claramente los cambios.
 5. Abre un **Pull Request** explicando qué hace tu código y por qué debería integrarse.
 
