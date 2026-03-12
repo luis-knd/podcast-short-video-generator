@@ -1,8 +1,8 @@
 from difflib import SequenceMatcher
 
 from src.domain.subtitle_models import AlignedWord, ReconciledCue, ReconciledWord, SubtitleCue
+from src.domain.text_utils import normalize_token
 from src.infrastructure.subtitles.approximate_aligner import ApproximateWordAligner
-from src.infrastructure.subtitles.normalization import normalize_token
 
 
 class TranscriptReconciler:

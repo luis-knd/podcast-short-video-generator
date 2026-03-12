@@ -2,6 +2,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
+from src.domain.broll_models import BrollInsertion, ShortEditingPlan
 from src.domain.entities import Video
 from src.domain.exceptions import InfrastructureError
 from src.domain.value_objects import TimeInterval, VideoFormat
@@ -13,7 +14,7 @@ from src.infrastructure.ffmpeg_processor import FFmpegVideoProcessor
 def test_ffmpeg_processor_generates_short(mock_subtitle_processor_class, mock_ffmpeg):
     # Arrange
     mock_subtitle_processor = mock_subtitle_processor_class.return_value
-    mock_subtitle_processor.process_subtitles.return_value = []
+    mock_subtitle_processor.build_timeline.return_value = MagicMock()
     processor = FFmpegVideoProcessor()
 
     # Use a challenging path to test ASS path escaping
@@ -112,9 +113,13 @@ def test_ffmpeg_processor_generates_short(mock_subtitle_processor_class, mock_ff
 
     # Verify subtitle processor call
     ass_filepath = "C:\\fake:dir\\out.ass"
-    mock_subtitle_processor.process_subtitles.assert_called_once_with(
-        "subs.srt", interval, ass_filepath, media_filepath="in_video.mp4"
+    mock_subtitle_processor.build_timeline.assert_called_once_with(
+        srt_filepath="subs.srt",
+        interval=interval,
+        output_ass_filepath=ass_filepath,
+        media_filepath="in_video.mp4",
     )
+    mock_subtitle_processor.write_ass_from_timeline.assert_called_once()
 
 
 @patch("src.infrastructure.ffmpeg_processor.ffmpeg")
@@ -122,7 +127,7 @@ def test_ffmpeg_processor_generates_short(mock_subtitle_processor_class, mock_ff
 def test_ffmpeg_processor_generates_short_with_outro_and_fades(mock_subtitle_processor_class, mock_ffmpeg):
     # Arrange
     mock_subtitle_processor = mock_subtitle_processor_class.return_value
-    mock_subtitle_processor.process_subtitles.return_value = []
+    mock_subtitle_processor.build_timeline.return_value = MagicMock()
     processor = FFmpegVideoProcessor()
 
     video = Video(filepath="in_video.mp4", subtitles_filepath="subs.srt")
@@ -237,7 +242,7 @@ def test_ffmpeg_processor_generates_short_with_outro_and_fades(mock_subtitle_pro
 @patch("src.infrastructure.ffmpeg_processor.SubtitleProcessor")
 def test_ffmpeg_processor_uses_default_fade_duration_when_outro_is_enabled(mock_subtitle_processor_class, mock_ffmpeg):
     mock_subtitle_processor = mock_subtitle_processor_class.return_value
-    mock_subtitle_processor.process_subtitles.return_value = []
+    mock_subtitle_processor.build_timeline.return_value = MagicMock()
     processor = FFmpegVideoProcessor()
 
     video = Video(filepath="in_video.mp4", subtitles_filepath="subs.srt")
@@ -310,7 +315,7 @@ def test_ffmpeg_processor_uses_default_fade_duration_when_outro_is_enabled(mock_
 def test_ffmpeg_processor_generates_short_with_outro_and_zero_fade(mock_subtitle_processor_class, mock_ffmpeg):
     # Arrange
     mock_subtitle_processor = mock_subtitle_processor_class.return_value
-    mock_subtitle_processor.process_subtitles.return_value = []
+    mock_subtitle_processor.build_timeline.return_value = MagicMock()
     processor = FFmpegVideoProcessor()
 
     video = Video(filepath="in_video.mp4", subtitles_filepath="subs.srt")
@@ -418,7 +423,7 @@ def test_append_outro_clamps_fade_duration_to_base_duration(mock_ffmpeg):
 def test_ffmpeg_processor_wraps_ffmpeg_error_as_infrastructure_error(mock_subtitle_processor_class, mock_ffmpeg):
     # Arrange
     mock_subtitle_processor = mock_subtitle_processor_class.return_value
-    mock_subtitle_processor.process_subtitles.return_value = []
+    mock_subtitle_processor.build_timeline.return_value = MagicMock()
     processor = FFmpegVideoProcessor()
 
     video = Video(filepath="in_video.mp4", subtitles_filepath="subs.srt")
@@ -460,3 +465,162 @@ def test_ffmpeg_processor_wraps_ffmpeg_error_as_infrastructure_error(mock_subtit
         )
     assert str(exc_info.value) == "FFmpeg processing failed: boom"
     assert isinstance(exc_info.value.__cause__, FakeFFmpegError)
+
+
+@patch("src.infrastructure.ffmpeg_processor.ffmpeg")
+def test_ffmpeg_processor_applies_cutaway_plan_before_ass_burn(mock_ffmpeg):
+    base_stream = MagicMock(name="base_stream")
+    overlay_stream = MagicMock(name="overlay_stream")
+    mock_ffmpeg.input.return_value.video = overlay_stream
+    overlay_stream.filter.return_value = overlay_stream
+    mock_ffmpeg.overlay.return_value = "composited"
+
+    processor = FFmpegVideoProcessor(editing_plan_builder=MagicMock())
+    plan = ShortEditingPlan(
+        short_id="short_0",
+        enabled=True,
+        strategy_version="broll-plan-v1",
+        insertions=(
+            BrollInsertion(
+                insertion_id="insert-0001",
+                beat_id="beat-0001",
+                mode="cutaway",
+                asset_provider="local_stills",
+                asset_path="asset.png",
+                start_ms=1000,
+                end_ms=2200,
+                source_beat_score=0.9,
+                candidate_score=0.8,
+                x=0,
+                y=0,
+                width=1080,
+                height=1920,
+                opacity=1.0,
+                asset_in_ms=0,
+                asset_out_ms=1200,
+            ),
+        ),
+    )
+
+    composited_stream = processor._apply_editing_plan(base_stream, plan, VideoFormat.youtube_shorts())
+
+    assert composited_stream == "composited"
+    mock_ffmpeg.overlay.assert_called_once_with(
+        base_stream,
+        overlay_stream,
+        x=0,
+        y=0,
+        enable="between(t,1.000,2.200)",
+        eof_action="pass",
+    )
+
+
+@patch("src.infrastructure.ffmpeg_processor.ffmpeg")
+def test_ffmpeg_processor_builds_overlay_stream_for_still_images_with_opacity(mock_ffmpeg):
+    overlay_stream = MagicMock(name="overlay_stream")
+    overlay_stream.filter.return_value = overlay_stream
+    mock_ffmpeg.input.return_value.video = overlay_stream
+
+    processor = FFmpegVideoProcessor(editing_plan_builder=MagicMock())
+    insertion = BrollInsertion(
+        insertion_id="insert-0001",
+        beat_id="beat-0001",
+        mode="overlay",
+        asset_provider="local_media",
+        asset_path="asset.png",
+        start_ms=1000,
+        end_ms=2500,
+        source_beat_score=0.9,
+        candidate_score=0.8,
+        x=100,
+        y=120,
+        width=800,
+        height=520,
+        opacity=0.5,
+        asset_in_ms=0,
+        asset_out_ms=1500,
+    )
+
+    result = processor._build_broll_stream(insertion, VideoFormat.youtube_shorts())
+
+    assert result == overlay_stream
+    mock_ffmpeg.input.assert_called_once_with("asset.png", loop=1, framerate=30, t=1.5)
+    assert overlay_stream.filter.call_args_list == [
+        call("setpts", "PTS-STARTPTS+1.000/TB"),
+        call("scale", 800, 520, force_original_aspect_ratio="decrease"),
+        call("pad", 800, 520, "(ow-iw)/2", "(oh-ih)/2"),
+        call("format", "rgba"),
+        call("colorchannelmixer", aa=0.5),
+    ]
+
+
+@patch("src.infrastructure.ffmpeg_processor.ffmpeg")
+def test_ffmpeg_processor_builds_full_frame_cutaway_stream_for_video_assets(mock_ffmpeg):
+    cutaway_stream = MagicMock(name="cutaway_stream")
+    cutaway_stream.filter.return_value = cutaway_stream
+    mock_ffmpeg.input.return_value.video = cutaway_stream
+
+    processor = FFmpegVideoProcessor(editing_plan_builder=MagicMock())
+    insertion = BrollInsertion(
+        insertion_id="insert-0002",
+        beat_id="beat-0002",
+        mode="full_frame_cutaway",
+        asset_provider="manual_override",
+        asset_path="manual.mp4",
+        start_ms=2000,
+        end_ms=4600,
+        source_beat_score=1.0,
+        candidate_score=1.0,
+        x=0,
+        y=0,
+        width=1080,
+        height=1920,
+        opacity=1.0,
+        asset_in_ms=0,
+        asset_out_ms=2600,
+        discovery_source="manual_override",
+        anchor_text="so confusing",
+    )
+
+    result = processor._build_broll_stream(insertion, VideoFormat.youtube_shorts())
+
+    assert result == cutaway_stream
+    mock_ffmpeg.input.assert_called_once_with("manual.mp4", ss=0.0, t=2.6)
+    assert cutaway_stream.filter.call_args_list == [
+        call("setpts", "PTS-STARTPTS+2.000/TB"),
+        call("scale", 1080, 1920, force_original_aspect_ratio="increase"),
+        call("crop", 1080, 1920, "(in_w-out_w)/2", "(in_h-out_h)/2"),
+    ]
+
+
+def test_ffmpeg_processor_returns_base_stream_when_editing_plan_is_disabled():
+    processor = FFmpegVideoProcessor(editing_plan_builder=MagicMock())
+    base_stream = MagicMock(name="base_stream")
+    disabled_plan = ShortEditingPlan(
+        short_id="short_0",
+        enabled=False,
+        strategy_version="broll-plan-v1",
+        insertions=(),
+    )
+
+    assert processor._apply_editing_plan(base_stream, None, VideoFormat.youtube_shorts()) is base_stream
+    assert processor._apply_editing_plan(base_stream, disabled_plan, VideoFormat.youtube_shorts()) is base_stream
+
+
+@patch("src.infrastructure.ffmpeg_processor.ConfigManager")
+def test_ffmpeg_processor_build_editing_plan_builder_coerces_invalid_local_dirs(mock_config_manager):
+    config = mock_config_manager.return_value
+    config.get_broll_setting.side_effect = lambda name, default: {
+        "local_search_dirs": "invalid",
+        "beat_score_threshold": 0.7,
+        "cutaway_score_threshold": 0.85,
+        "min_gap_ms": 5000,
+        "overlay_top_y": 140,
+        "enabled": True,
+    }.get(name, default)
+
+    use_case = FFmpegVideoProcessor._build_editing_plan_builder()
+
+    assert use_case.enabled is True
+    assert use_case.providers[0].search_dirs == ()
+    assert use_case.insertion_planner.minimum_gap_ms == 5000

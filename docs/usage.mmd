@@ -1,5 +1,5 @@
 ---
-title: Execution Flow
+title: Execution Flow with Alignment and B-roll
 config:
   theme: base
   look: classic
@@ -47,7 +47,13 @@ flowchart TD
     FALLBACK["Use approximate word timing"]:::fallback
     PROJECT["Project interval and group phrases"]:::process
     WRITE_ASS["Write short_N.ass"]:::process
-    RENDER["Split-screen render<br/>and burn ASS"]:::process
+    BROLL_ENABLED{"broll.enabled?"}:::decision
+    DETECT["Detect impact beats<br/>from subtitle timeline"]:::process
+    OVERRIDE["Resolve manual overrides<br/>by short_id + anchor_text"]:::process
+    SEARCH["Fallback to local/free B-roll<br/>and rank candidates"]:::process
+    PLAN["Build `ShortEditingPlan`<br/>and write audit JSON"]:::process
+    COMPOSE["Compose overlay/cutaway/<br/>full_frame_cutaway before subtitles"]:::process
+    RENDER["Burn ASS over final video"]:::process
     OUTRO{"Outro enabled?"}:::decision
     CONCAT["Append outro with fades"]:::process
     OUTPUT([short_N.mp4 ready]):::entry
@@ -73,13 +79,20 @@ flowchart TD
     SAVE_REC e18@--> PROJECT
     FALLBACK e19@--> PROJECT
     PROJECT e20@--> WRITE_ASS
-    WRITE_ASS e21@--> RENDER
-    RENDER e22@--> OUTRO
-    OUTRO e23@-- yes --> CONCAT
-    OUTRO e24@-- no --> OUTPUT
-    CONCAT e25@--> OUTPUT
-    OUTPUT e26@--> LOOP
-    LOOP e27@-- done --> DONE
+    WRITE_ASS e21@--> BROLL_ENABLED
+    BROLL_ENABLED e22@-- yes --> DETECT
+    BROLL_ENABLED e23@-- no --> RENDER
+    DETECT e24@--> OVERRIDE
+    OVERRIDE e25@--> SEARCH
+    SEARCH e26@--> PLAN
+    PLAN e27@--> COMPOSE
+    COMPOSE e28@--> RENDER
+    RENDER e29@--> OUTRO
+    OUTRO e30@-- yes --> CONCAT
+    OUTRO e31@-- no --> OUTPUT
+    CONCAT e32@--> OUTPUT
+    OUTPUT e33@--> LOOP
+    LOOP e34@-- done --> DONE
 
     e1@{ animate: true }
     e2@{ animate: true }
@@ -108,6 +121,13 @@ flowchart TD
     e25@{ animate: true }
     e26@{ animate: true }
     e27@{ animate: true }
+    e28@{ animate: true }
+    e29@{ animate: true }
+    e30@{ animate: true }
+    e31@{ animate: true }
+    e32@{ animate: true }
+    e33@{ animate: true }
+    e34@{ animate: true }
 
     classDef entry fill:#ffd9c7,stroke:#b15b2f,color:#26140a
     classDef process fill:#dfeeff,stroke:#3963a3,color:#152036

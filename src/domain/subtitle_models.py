@@ -133,3 +133,54 @@ class ReconciledCue:
                 if isinstance(word_payload, dict)
             ),
         )
+
+
+@dataclass(frozen=True)
+class ProjectedWord:
+    text: str
+    start_ms: int
+    end_ms: int
+    confidence: float
+    source: str
+    match_method: str
+    fallback_used: bool = False
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "text": self.text,
+            "start": self.start_ms,
+            "end": self.end_ms,
+            "confidence": self.confidence,
+            "source": self.source,
+            "match_method": self.match_method,
+            "fallback_used": self.fallback_used,
+        }
+
+
+@dataclass(frozen=True)
+class ProjectedCue:
+    cue_id: str
+    speaker: str
+    original_text: str
+    start_ms: int
+    end_ms: int
+    timing_mode: str
+    quality_score: float
+    words: tuple[ProjectedWord, ...]
+
+    @property
+    def duration_ms(self) -> int:
+        return max(0, self.end_ms - self.start_ms)
+
+
+@dataclass(frozen=True)
+class SubtitleTimeline:
+    interval_start_ms: int
+    interval_end_ms: int
+    cues: tuple[ProjectedCue, ...]
+    segments: tuple[dict[str, object], ...]
+    quality_score: float
+
+    @property
+    def duration_ms(self) -> int:
+        return max(0, self.interval_end_ms - self.interval_start_ms)

@@ -47,8 +47,8 @@ Guiado por Pruebas (TDD)**.
 
 ## Requisitos previos
 
-- Python 3.10+ para la ejecucion del generador.
-- Python 3.11 o 3.12 recomendado si quieres correr toda la bateria de calidad local, especialmente `mutmut`.
+- Python 3.10+ para la ejecución del generador.
+- Python 3.11 o 3.12 recomendados si quieres correr toda la bateria de calidad local, especialmente `mutmut`.
 - `ffmpeg` instalado a nivel de sistema (requisito indispensable para `ffmpeg-python`).
 
 ## Instalación y Configuración
@@ -88,12 +88,12 @@ el sistema operativo.
 
 ### Alineación palabra-audio
 
-El pipeline de subtítulos intenta alinear palabras sobre el media original antes de generar el `.ass` karaoke.
+El pipeline de subtítulos intenta alinear palabras sobre él media original antes de generar el `.ass` karaoke.
 
 - Si `faster-whisper` está disponible y la alineación es válida, el sistema usa timings reconciliados con el SRT.
 - Si la alineación falla, no hay dependencia instalada o la calidad es baja, el proceso vuelve automáticamente al
   cálculo aproximado actual.
-- La primera alineación de un media puede tardar más porque `faster-whisper` necesita cargar el modelo y generar el
+- La primera alineación de un medio puede tardar más porque `faster-whisper` necesita cargar el modelo y generar el
   ASR bruto del archivo completo.
 - La caché se guarda junto al output:
 
@@ -103,7 +103,7 @@ outputs/.cache/subtitle_alignment/
 └── reconciled/
 ```
 
-`raw_asr/` almacena el ASR bruto del media completo. `reconciled/` almacena el resultado derivado de reconciliar ese
+`raw_asr/` almacena el ASR bruto del medio completo. `reconciled/` almacena el resultado derivado de reconciliar ese
 ASR con el subtítulo original. Así se evita recalcular tanto la transcripción como el matching en ejecuciones
 repetidas del mismo source media.
 
@@ -153,6 +153,17 @@ generados:
     "model_size": "base",
     "vad_filter": true
   },
+  "broll": {
+    "enabled": true,
+    "beat_score_threshold": 0.68,
+    "cutaway_score_threshold": 0.82,
+    "min_gap_ms": 4500,
+    "overlay_top_y": 120,
+    "local_search_dirs": [
+      "inputs/broll/library"
+    ],
+    "overrides_filepath": "inputs/broll-overrides.json"
+  },
   "subtitles": {
     "active_border_color_hex": "#000000",
     "base_border_color_hex": "#000000",
@@ -172,12 +183,244 @@ a medida que se pronuncian en el modo "karaoke".
   - `enabled`: Activa o desactiva la alineación real.
   - `model_size`: Tamaño del modelo ASR.
   - `vad_filter`: Activa filtrado de voz antes del cálculo de timestamps.
+- **`broll`**:
+  - `enabled`: Activa el pipeline de B-roll. En el estado actual del repo viene activado por defecto.
+  - `beat_score_threshold`: Score mínimo para considerar un beat visualmente reforzable.
+  - `cutaway_score_threshold`: Score mínimo para permitir una inserción a pantalla completa.
+  - `min_gap_ms`: Distancia mínima entre inserciones dentro de un mismo short.
+  - `overlay_top_y`: Posición "Y" inicial de overlays para evitar conflicto con subtítulos.
+  - `local_search_dirs`: Carpetas opcionales con una librería local de medios para fallback de B-roll.
+  - `overrides_filepath`: Ruta opcional al archivo de overrides manuales. Si se omite, se usa `inputs/broll-overrides.json`.
 - **`subtitles`**:
   - `base_color_hex`: El color base inactivo del texto.
   - `font_name`: El nombre de la fuente tipográfica a utilizar.
   - `font_size`: El tamaño de la fuente.
   - `active_border_color_hex`: El color del contorno de la palabra iluminada.
   - `y_position`: La posición vertical (eje Y) donde se centrarán los subtítulos en un lienzo de 1080x1920.
+
+### B-roll automático
+
+El pipeline puede detectar beats de alto impacto a partir del transcript alineado y construir un plan intermedio de
+edición antes del render final.
+
+- Si `broll.enabled=false`, el flujo sigue exactamente igual que antes.
+- Si `broll.enabled=true`, el sistema intenta:
+  - detectar beats visualmente reforzables
+  - resolver primero overrides manuales por `short_id + anchor_text`
+  - buscar assets en proveedores gratuitos
+  - generar `overlay`, `cutaway` o `full_frame_cutaway`
+  - renderizar el short con B-roll sin tapar subtítulos
+- El repo ya incluye un `inputs/broll-overrides.json` de ejemplo activo para `short_2`.
+- El repo ya incluye una libreria local base en `inputs/broll/library` con `broll-metadata.json`.
+- Si falla la detección, la búsqueda o la descarga de assets, el short se sigue generando sin B-roll.
+- Si un override manual apunta a un video con audio, el pipeline ignora siempre ese audio y conserva el audio original del short.
+
+#### Proveedores soportados
+
+- `Pexels`: requiere `PEXELS_API_KEY` en `.env` o en variables de entorno del sistema.
+- `Pixabay`: requiere `PIXABAY_API_KEY` en `.env` o en variables de entorno del sistema.
+- `local_search_dirs`: libreria local para imágenes y videos (`.jpg`, `.jpeg`, `.png`, `.webp`, `.mp4`, `.mov`, `.webm`, `.m4v`).
+
+#### Como se puntua un candidato de B-roll
+
+Cada asset encontrado no se usa directamente. Primero recibe un `total_score` entre `0.0` y `1.0` en
+`src/application/broll/broll_candidate_ranker.py`.
+
+Formula actual:
+
+```text
+total_score =
+  0.40 * semantic_match +
+  0.20 * visual_fit +
+  0.15 * duration_fit +
+  0.10 * orientation_fit +
+  0.10 * diversity_bonus +
+  0.05 * technical_quality
+```
+
+Interpretacion de cada subscore:
+
+- `semantic_match`: cuanto coincide el significado del beat con el asset. Se calcula comparando tokens del beat y de
+  las queries contra `title`, `tags`, `description` y nombre del archivo. Es el factor mas importante.
+- `visual_fit`: premia que el asset sea video y que encaje bien en vertical.
+- `duration_fit`: mide si el clip sirve para cubrir la duracion del beat. Si el video dura lo suficiente, puntua alto.
+- `orientation_fit`: vuelve a valorar la orientacion. `vertical` puntua mejor que `square`, y `square` mejor que
+  `landscape`.
+- `diversity_bonus`: pequeño bonus cuando el asset trae metadata util, sobre todo `tags`.
+- `technical_quality`: valora la resolucion. Pesa poco frente al match semantico.
+
+Ejemplo simplificado:
+
+```text
+semantic_match = 0.75
+visual_fit = 0.95
+duration_fit = 1.00
+orientation_fit = 1.00
+diversity_bonus = 0.10
+technical_quality = 0.40
+
+total_score = 0.77
+```
+
+Importante: `total_score` no significa automaticamente "usar este video". El planner aplica despues filtros minimos
+adicionales en `src/application/broll/broll_insertion_planner.py`.
+
+Minimos actuales:
+
+- `minimum_candidate_score = 0.55`
+- `automatic_candidate_semantic_match_threshold = 0.30`
+- `support_candidate_semantic_match_threshold = 0.45`
+
+Eso significa:
+
+- un candidato puede tener `total_score` aceptable y aun asi quedar fuera si el `semantic_match` es flojo
+- los `support beats` exigen un match semantico mas estricto que los beats fuertes
+- este filtro extra evita inserciones incoherentes por palabras incidentales, por ejemplo elegir un clip solo porque
+  comparte un token aislado como `birds`
+
+#### Variables sensibles
+
+No guardes API keys en `config.json`, porque ese archivo está versionado dentro del repo. Usa un archivo `.env`
+local basado en `.env.example`:
+
+```bash
+cp .env.example .env
+```
+
+```dotenv
+PEXELS_API_KEY=tu_clave
+PIXABAY_API_KEY=tu_clave
+```
+
+El proyecto carga `.env` automaticamente al inicializar `ConfigManager`.
+
+#### Como funciona la libreria local de medios
+
+`local_search_dirs` no apunta a un archivo concreto, sino a una o varias carpetas con clips e imágenes reutilizables.
+La forma recomendada de curar esa libreria es agregar un archivo `broll-metadata.json` en la raiz de cada carpeta.
+Si existe ese manifest, el selector local usa esa metadata como fuente primaria y no depende del nombre del archivo.
+
+Ejemplo:
+
+```json
+{
+  "version": 1,
+  "assets": [
+    {
+      "path": "money/budget-crash-vertical.mp4",
+      "title": "Budget crash phone feed",
+      "tags": ["budget", "crash", "finance", "market"],
+      "description": "Vertical phone clip showing a market drop.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "city/night-street.png",
+      "title": "Night city street",
+      "tags": ["city", "street", "urban", "night"],
+      "description": "Still image for urban atmosphere.",
+      "asset_type": "image",
+      "orientation": "square",
+      "active": true
+    }
+  ]
+}
+```
+
+El repo ya trae una base curada para empezar a probar sin preparar una libreria desde cero
+
+Los clips incluidos cubren escenas de naturaleza, ciudad, tráfico, nieve, escritura, oficina, cementerio, protesta,
+emoción, reflexion y trabajo en equipo para que el fallback local ya tenga material reutilizable desde el primer run.
+
+El matching local con manifest:
+
+- tokeniza el beat detectado y las queries generadas
+- tokeniza `title`, `tags` y `description` de cada asset
+- prioriza assets con mejor intersección semantica
+- ignora entradas inactivas o cuyo archivo no exista
+
+Solo si un root de `local_search_dirs` no tiene `broll-metadata.json`, el sistema cae al fallback heurístico por nombre
+de archivo y carpetas.
+
+Ejemplos de nombres utiles:
+
+- `inputs/broll/money/budget-crash.mp4`
+- `inputs/broll/office/phone-screen-vertical.mp4`
+- `inputs/broll/city/night-street.png`
+
+Si en el nombre aparece `vertical`, `portrait`, `reel`, `short` o `9x16`, el selector asume que ese asset local ya
+está mejor preparado para `overlay` o `cutaway` vertical.
+
+#### Overrides manuales por short
+
+Cuando quieras forzar un asset concreto para una frase puntual, puedes agregar `inputs/broll-overrides.json`.
+Este archivo se evalúa antes de la búsqueda automática y permite usar videos locales curados sin depender del score del
+detector.
+
+Ejemplo:
+
+```json
+{
+  "version": 1,
+  "overrides": [
+    {
+      "short_id": "short_2",
+      "anchor_text": "job interview",
+      "asset_path": "../ejemploBroll1.mp4",
+      "mode": "full_frame_cutaway",
+      "start_ms": 460,
+      "end_ms": 1800,
+      "mute_asset_audio": true,
+      "priority": 200
+    },
+    {
+      "short_id": "short_2",
+      "anchor_text": "grave",
+      "asset_path": "../ejemploBroll.mp4",
+      "mode": "full_frame_cutaway",
+      "start_ms": 9280,
+      "end_ms": 12400,
+      "mute_asset_audio": true,
+      "priority": 200
+    }
+  ]
+}
+```
+
+Reglas de este archivo:
+
+- `short_id`: nombre del short objetivo, por ejemplo `short_2`
+- `anchor_text`: texto o subfrase a matchear contra beats detectados o directamente contra el timeline real
+- `asset_path`: ruta absoluta o relativa al propio `broll-overrides.json`
+- `mode`: en esta fase se recomienda `full_frame_cutaway`
+- `start_ms` / `end_ms`: opcionales; si no se informan, el sistema usa el timing real del beat
+- `mute_asset_audio`: se conserva por claridad editorial, pero el renderer ignora siempre el audio del asset
+- `priority`: resuelve conflictos cuando dos overrides compiten por el mismo beat
+
+Si un override no encuentra beat compatible o el archivo no existe, el pipeline cae al flujo automático sin romper el
+short.
+
+El archivo que viene en el repo usa estos dos clips de ejemplo:
+
+- `../ejemploBroll1.mp4` para reforzar el inicio de `job interview`
+- `../ejemploBroll.mp4` para reforzar el tramo de `grave`
+
+#### Artefactos generados cuando B-roll está activo
+
+Por cada short se generan JSON auditables junto al output:
+
+- `short_N.impact_beats.json`
+- `short_N.broll_candidates.json`
+- `short_N.broll_plan.json`
+
+Estos archivos permiten revisar:
+
+- que beats fueron detectados
+- que queries y candidatos se evaluaron
+- de donde vino cada candidato mediante `discovery_source`
+- qué inserciones se aplicaron o se descartaron
+- si una inserción vino de `manual_override`, `local_manifest`, `local_heuristic_fallback`, `pexels` o `pixabay`
 
 ### Formato del JSON de Intervalos
 Por defecto, **(`inputs/recortes.json`)**
@@ -273,22 +516,34 @@ Fuente Mermaid: `docs/architecture.mmd`
 (`TimeInterval`, `VideoFormat`), las Interfaces (`IVideoProcessor`) y los modelos inmutables de subtítulos
 (`SubtitleCue`, `AlignedWord`, `ReconciledWord`, `ReconciledCue`).
 - **Capa de Aplicación (`src/application`)**: Contiene el Caso de Uso principal `GenerateShortUseCase` encargado de la
-orquestación.
+orquestación, además del pipeline de B-roll (`BuildShortEditingPlanUseCase`, `ImpactBeatDetector`,
+`BrollQueryGenerator`, `BrollCandidateRanker`, `ManualBrollOverrideResolver`, `BrollInsertionPlanner`).
 - **Capa de Infraestructura (`src/infrastructure`)**: Implementa `FFmpegVideoProcessor` acoplándose a `ffmpeg-python`,
 `SubtitleProcessor` como facade del pipeline de subtítulos, `ConfigManager` para administrar `config.json` y el paquete
 `src/infrastructure/subtitles/` con componentes desacoplados para parseo, alineación, reconciliación, proyección por
-intervalo, caché en dos niveles y escritura del `.ass`.
-- **Interfaces (`main.py`)**: Valida argumentos y llama al caso de uso inyectando las dependencias.
+intervalo, caché en dos niveles y escritura del `.ass`. La infraestructura de B-roll vive en
+`src/infrastructure/broll/` con providers gratuitos/locales, loader de overrides manuales, caché de assets y escritura
+de artifacts auditables.
+- **Interfaces (`main.py`)**: Válida, argumentos y llama al caso de uso inyectando las dependencias.
 
 El pipeline de subtítulos ahora queda separado en responsabilidades estables:
 
 - `SubtitleParser`: parsea el SRT hacia cues de dominio.
-- `FasterWhisperWordAligner`: genera word timestamps reales sobre el media completo.
+- `FasterWhisperWordAligner`: genera word timestamps reales sobre el medio completo.
 - `AlignmentCache`: persiste `raw_asr` y `reconciled`.
 - `TranscriptReconciler`: preserva el texto del subtítulo original y le asigna timing real cuando la calidad lo permite.
 - `ApproximateWordAligner`: fallback explicito si la alineación falla o no es confiable.
 - `IntervalSubtitleProjector`: recorta y desplaza tiempos al intervalo del short.
 - `AssWriter`: mantiene el render karaoke en `.ass`.
+
+El pipeline de B-roll se apoya en ese timeline alineado:
+
+- `ImpactBeatDetector`: identifica beats visualmente reforzables.
+- `BrollQueryGenerator`: genera queries semánticas para stock/local media.
+- `BrollCandidateRanker`: puntúa relevancia y calidad técnica.
+- `ManualBrollOverrideResolver`: fuerza assets manuales por `short_id + anchor_text` y puede sintetizar un beat si el detector no lo emitió.
+- `BrollInsertionPlanner`: decide `overlay` vs. `cutaway`, soporta `full_frame_cutaway`, trims y spacing.
+- `BrollPlanJsonWriter`: persiste `impact_beats.json`, `broll_candidates.json` y `broll_plan.json`.
 
 ---
 
@@ -306,8 +561,9 @@ Fuente Mermaid: `docs/usage.mmd`
 ## Flujo de Ejecución (Diagrama de Secuencia)
 
 Este diagrama enfatiza el orden temporal entre la CLI, el caso de uso, el pipeline de subtítulos, la caché de
-alineación y el render final. Es la vista más útil para entender cuándo se reutiliza `raw_asr`, cuándo se reconcilia y
-cuándo se activa el fallback aproximado.
+alineación, la planificación de B-roll y el render final. Es la vista más útil para entender cuándo se reutiliza
+`raw_asr`, cuándo se reconcilia, cuándo se construye él `ShortEditingPlan` y en qué punto el B-roll se compone antes
+del burn final de subtítulos.
 
 ![Flujo de Secuencia](docs/usage-sequence.svg)
 

@@ -13,11 +13,30 @@ class ConfigManager:
 
     @staticmethod
     def _load_config() -> dict:
+        ConfigManager._load_env_file()
         config_path = os.path.join(os.path.dirname(__file__), "..", "..", "config.json")
         if os.path.exists(config_path):
-            with open(config_path) as f:
+            with open(config_path, encoding="utf-8") as f:
                 return json.load(f)
         return {}
+
+    @staticmethod
+    def _load_env_file():
+        env_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
+        if not os.path.exists(env_path):
+            return
+
+        with open(env_path, encoding="utf-8") as env_file:
+            for raw_line in env_file:
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = value
 
     def get_color(self, name: str, default: str) -> str:
         colors = self.config.get("brand_colors", {})
@@ -36,6 +55,9 @@ class ConfigManager:
 
     def get_alignment_setting(self, name: str, default: any) -> any:
         return self.config.get("alignment", {}).get(name, default)
+
+    def get_broll_setting(self, name: str, default: any) -> any:
+        return self.config.get("broll", {}).get(name, default)
 
     @staticmethod
     def hex_to_ass_color(hex_color: str) -> str:

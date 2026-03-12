@@ -1,0 +1,495 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "path": "work/project-pressure-desk.mp4",
+      "title": "Late Night Focus",
+      "tags": [
+        "focused",
+        "thoughtful",
+        "diligent",
+        "work",
+        "late night",
+        "professional",
+        "concentration",
+        "serious"
+      ],
+      "description": "A woman with striking blue eyes is engrossed in her work on a laptop, illuminated by the screen's glow. She appears thoughtful and diligently focused in a dimly lit environment.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "work/supportive-coworker-moment.mp4",
+      "title": "Late-Night Collaboration and Support",
+      "tags": [
+        "focused",
+        "collaborative",
+        "supportive",
+        "late night",
+        "teamwork",
+        "office",
+        "attentive",
+        "happy"
+      ],
+      "description": "A man and a woman are intently focused on a laptop screen in a dimly lit office, with the man gently resting his hand on her shoulder. They appear to be working together late into the night, sharing a moment of focused collaboration and mutual support.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "collaboration/team-collaboration-meeting.mp4",
+      "title": "Team Collaboration in Action",
+      "tags": [
+        "collaboration",
+        "teamwork",
+        "happy",
+        "focused",
+        "office",
+        "brainstorming",
+        "diverse team",
+        "engaged"
+      ],
+      "description": "A diverse team of four individuals is actively engaged in a collaborative session, gathered around a laptop and discussing its content. The team appears focused and cheerful, with some members smiling, indicating a positive and productive work environment.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "teamwork/team-unity-moment.mp4",
+      "title": "Joyful Team Celebration",
+      "tags": [
+        "celebration",
+        "teamwork",
+        "success",
+        "happy",
+        "joyful",
+        "collaboration",
+        "achievement",
+        "office"
+      ],
+      "description": "A diverse group of colleagues celebrates a success or achievement, raising their hands in a gesture of high-fives and unity. The central figure expresses pure joy and excitement, reflecting a positive team dynamic.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "cityscape/daytime-city-traffic.mp4",
+      "title": "Vibrant Ho Chi Minh City Street Scene",
+      "tags": [
+        "cityscape",
+        "urban life",
+        "bustling",
+        "motorbikes",
+        "Ho Chi Minh City",
+        "street scene",
+        "architecture",
+        "energetic"
+      ],
+      "description": "An aerial view captures the lively energy of a city street lined with trees, a park, and towering buildings. Numerous motorbikes and pedestrians fill the street, showcasing the dynamic urban rhythm.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "citylife/heavy-traffic-modern-city.mp4",
+      "title": "Urban Congestion: A City's Daily Pulse",
+      "tags": [
+        "traffic",
+        "urban",
+        "commute",
+        "congestion",
+        "citylife",
+        "vehicles",
+        "focused",
+        "frustrated"
+      ],
+      "description": "This overhead shot captures the intense daily traffic of a bustling metropolitan area, with numerous cars and motorcycles navigating a multi-lane street flanked by modern skyscrapers and lush trees. Commuters are seen in various vehicles, creating a dynamic scene of urban movement.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "cityscape/ny-bridge-waterfront.mp4",
+      "title": "Iconic Brooklyn Bridge and Manhattan Skyline Vista",
+      "tags": [
+        "Brooklyn Bridge",
+        "New York City",
+        "Manhattan skyline",
+        "East River",
+        "cityscape",
+        "iconic",
+        "serene",
+        "sunny"
+      ],
+      "description": "A breathtaking view of the Brooklyn Bridge spanning the East River under a clear blue sky, with the impressive Manhattan skyline in the background. The scene exudes a sense of serene grandeur, capturing the essence of New York City's architectural marvels.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "cityscape/polluted-city-smog.mp4",
+      "title": "Veiled Metropolis",
+      "tags": [
+        "city",
+        "urban",
+        "haze",
+        "foggy",
+        "gloomy",
+        "obscured",
+        "atmospheric",
+        "somber"
+      ],
+      "description": "An expansive urban landscape is obscured by a thick layer of haze or fog, rendering distant buildings as ghostly silhouettes. The atmospheric conditions create a sense of mystery and subdued tranquility.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "emotion/alone-reflection-scene.mp4",
+      "title": "Deep in Thought: A Moment of Contemplation",
+      "tags": [
+        "focused",
+        "pensive",
+        "troubled",
+        "contemplation",
+        "indoor",
+        "youth",
+        "reflection",
+        "concerned"
+      ],
+      "description": "A young person with their eyes closed and brow furrowed appears to be deeply concentrated or experiencing a moment of intense thought or frustration. The soft indoor lighting suggests a personal and reflective setting.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "interaction/best-compliment-reflection.mp4",
+      "title": "Engaged Friends Deep in Conversation",
+      "tags": [
+        "friends",
+        "conversation",
+        "restaurant",
+        "serious",
+        "focused",
+        "concerned",
+        "listening",
+        "discussion"
+      ],
+      "description": "Two young women are engrossed in a serious discussion at a restaurant. One is actively speaking with a concerned expression, while the other listens intently, creating a moment of shared focus.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "lifestyle/deep-understanding-moment.mp4",
+      "title": "Connected Conversations in Autumn",
+      "tags": [
+        "couple",
+        "park",
+        "autumn",
+        "conversation",
+        "happy",
+        "connected",
+        "outdoors",
+        "stroll"
+      ],
+      "description": "A couple enjoys a leisurely walk through a park during the golden hour of autumn, sharing a warm and engaging conversation. Their expressions convey contentment and a deep connection as they stroll along the path.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "conceptual/negative-thought-cloud.mp4",
+      "title": "Ascension of the Mind",
+      "tags": [
+        "contemplative",
+        "serious",
+        "surreal",
+        "conceptual art",
+        "dark theme",
+        "smoke effect",
+        "floating objects",
+        "male portrait",
+        "polluted mind",
+        "dark thoughts"
+      ],
+      "description": "A young man looks intently at the viewer, surrounded by ethereal smoke and floating dark objects. The scene evokes a sense of introspection and a journey through an unknown mental landscape.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "lifestyle/not-alone-feeling.mp4",
+      "title": "Golden Hour Romance",
+      "tags": [
+        "happy",
+        "loving",
+        "couple",
+        "golden hour",
+        "outdoor walk",
+        "romance",
+        "nature",
+        "stroll"
+      ],
+      "description": "A happy couple walks along a sun-drenched path, sharing smiles and a loving gaze. The warm golden light highlights their joyful expressions during their outdoor stroll.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "nature/mountain-trail.mp4",
+      "title": "Path Through the Ancient Forest",
+      "tags": [
+        "forest",
+        "path",
+        "nature",
+        "woods",
+        "hiking",
+        "serene",
+        "peaceful",
+        "exploration"
+      ],
+      "description": "A narrow dirt path winds through a dense, moss-covered forest, bathed in filtered sunlight. The scene evokes a sense of tranquility and an invitation to explore.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "nature/sunny-lake.mp4",
+      "title": "Golden River Sunset",
+      "tags": [
+        "sunset",
+        "river",
+        "goldenlight",
+        "peaceful",
+        "serene",
+        "naturalbeauty",
+        "reflective",
+        "tranquil"
+      ],
+      "description": "The sun casts a radiant golden glow over a wide body of water, creating a dazzling reflection path on its surface. The serene landscape evokes a sense of peace and wonder.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "landscape/mountain-town.mp4",
+      "title": "Alpine Village Retreat Beneath Majestic Peaks",
+      "tags": [
+        "alpine",
+        "village",
+        "mountains",
+        "serene",
+        "peaceful",
+        "nature",
+        "scenic",
+        "tranquil"
+      ],
+      "description": "A charming European village with traditional houses and lush greenery is nestled in a valley, framed by a rustic wooden fence and a winding road. In the background, a towering snow-capped mountain pierces through the clouds, evoking a sense of tranquil grandeur.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "wildlife/birds-flying-bw-water.mp4",
+      "title": "Seagulls in Flight Above the City Strait",
+      "tags": [
+        "seagulls",
+        "flight",
+        "cityscape",
+        "monochrome",
+        "serene",
+        "urban nature",
+        "cloudy",
+        "freedom"
+      ],
+      "description": "A flock of seagulls glides gracefully over the dark, rippling water, with a modern city skyline silhouetted under a vast, cloudy sky. The monochrome aesthetic highlights the dynamic movement and the peaceful yet imposing urban-natural landscape.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "nature/birds-same-branch.mp4",
+      "title": "A Tender Moment Between Sparrows",
+      "tags": [
+        "sparrows",
+        "birds",
+        "affectionate",
+        "loving",
+        "peaceful",
+        "nature",
+        "golden hour",
+        "wildlife"
+      ],
+      "description": "Two small sparrows are perched closely on a branch, seemingly sharing an intimate interaction with their beaks almost touching. The warm, golden light in the background casts a soft glow, creating a peaceful and affectionate scene.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "nature/walking-in-snow.mp4",
+      "title": "Winter Wanderer in a Snowfall",
+      "tags": [
+        "winter",
+        "snow",
+        "walk",
+        "solitude",
+        "peaceful",
+        "contemplative",
+        "nature",
+        "forest"
+      ],
+      "description": "A lone individual walks along a snow-covered road, surrounded by a winter forest during a peaceful snowfall. The scene evokes a sense of quiet solitude and the beauty of nature in winter.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "lifestyle/hand-writing-book.mp4",
+      "title": "Focused Hand Writing in a Notebook",
+      "tags": [
+        "writing",
+        "notebook",
+        "pen",
+        "focused",
+        "concentrated",
+        "calm",
+        "study",
+        "journaling"
+      ],
+      "description": "A close-up shot captures a person's hands intently writing with a pen in a notebook. The scene highlights a moment of focused concentration and quiet productivity.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "study/english-study-frustration.mp4",
+      "title": "Deep in Thought or Overwhelmed by Work",
+      "tags": [
+        "frustrated",
+        "stressed",
+        "studying",
+        "student",
+        "academic challenge",
+        "overwhelmed",
+        "concentration",
+        "library"
+      ],
+      "description": "A young man sits at a desk, pulling at his hair, appearing deeply concentrated or frustrated with his work or studies. The scene suggests an intense period of academic or professional effort in a library-like setting.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "protest/protest-police-crowd.mp4",
+      "title": "Freedom on Display: A Moment of Advocacy",
+      "tags": [
+        "protest",
+        "freedom",
+        "humanrights",
+        "policeinteraction",
+        "advocacy",
+        "determined",
+        "publicsquare",
+        "civilrights"
+      ],
+      "description": "A person holds a vibrant 'Freedom is a Right!' sign, engaging in what appears to be a public demonstration. A uniformed officer is present, suggesting an interaction within the context of civil advocacy.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "social/friends-argument-cafe.mp4",
+      "title": "Engaged Cafe Conversation",
+      "tags": [
+        "conversation",
+        "friends",
+        "cafe",
+        "expressive",
+        "focused",
+        "engaged",
+        "discussion",
+        "social"
+      ],
+      "description": "Two young women are engrossed in conversation at a cafe, with one actively speaking and gesturing. The other listens intently, creating a dynamic moment of social interaction.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "grief/man-standing-grave-cemetery.mp4",
+      "title": "Confronting Loss: A Solitary Farewell",
+      "tags": [
+        "grief",
+        "mourning",
+        "loss",
+        "cemetery",
+        "sadness",
+        "solemn",
+        "grave",
+        "farewell",
+        "remembrance"
+      ],
+      "description": "A lone figure dressed in black stands overlooking an open grave in a cemetery, reflecting on the profound sadness of a final goodbye. The scene evokes deep feelings of grief and remembrance.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "business/formal-handshake-office-meeting.mp4",
+      "title": "Sealing the Deal: A Professional Handshake",
+      "tags": [
+        "handshake",
+        "agreement",
+        "business",
+        "meeting",
+        "professional",
+        "focused",
+        "cooperation",
+        "office",
+        "interview"
+      ],
+      "description": "Two professionals, a man and a woman, shake hands across a conference table in a modern office. Their expressions convey focus and professionalism, suggesting an agreement or successful collaboration.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "people/man-smiling.mp4",
+      "title": "Joyful Young Professional in a Modern Office",
+      "tags": [
+        "happy",
+        "smiling",
+        "professional",
+        "office",
+        "young man",
+        "joy",
+        "workplace",
+        "confident"
+      ],
+      "description": "A young man with a radiant smile exudes happiness and confidence in a contemporary office setting. His genuine expression suggests a positive and welcoming professional environment.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    },
+    {
+      "path": "portrait/woman-smiling.mp4",
+      "title": "Radiant Smile in Natural Light",
+      "tags": [
+        "happy",
+        "smiling",
+        "woman",
+        "portrait",
+        "natural light",
+        "indoor",
+        "joyful",
+        "content"
+      ],
+      "description": "A young woman smiles genuinely, her face illuminated by warm natural light. Her expression conveys joy and contentment in a cozy indoor environment.",
+      "asset_type": "video",
+      "orientation": "vertical",
+      "active": true
+    }
+  ]
+}

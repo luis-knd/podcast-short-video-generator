@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from src.infrastructure.subtitles.normalization import normalize_token
+from src.domain.text_utils import normalize_token
 
 
 class FasterWhisperWordAligner:

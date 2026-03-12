@@ -1,5 +1,5 @@
 ---
-title: Sequence Flow for Alignment-Aware Short Generation
+title: Sequence Flow for Alignment-Aware Short Generation with B-roll
 config:
   theme: base
   look: classic
@@ -50,6 +50,13 @@ sequenceDiagram
     participant FW as FasterWhisperWordAligner
     participant R as TranscriptReconciler
     participant AW as ApproximateWordAligner
+    participant BP as BuildShortEditingPlanUseCase
+    participant ID as ImpactBeatDetector
+    participant OR as ManualBrollOverrideResolver
+    participant QG as BrollQueryGenerator
+    participant PR as Stock/Local Providers
+    participant OL as ManualBrollOverrideLoader
+    participant BW as BrollPlanJsonWriter
     participant ASS as AssWriter
     participant FF as ffmpeg
 
@@ -57,7 +64,7 @@ sequenceDiagram
     CLI->>+UC: execute(video, subs, intervals, output)
     loop for each interval
         UC->>+VP: generate_short(video, interval, format, output)
-        VP->>+SP: process_subtitles(srt, interval, ass, media)
+        VP->>+SP: build_timeline(srt, interval, ass, media)
         Note over SP: Parse cues and decide alignment mode
         alt alignment enabled and media path available
             SP->>C: load_raw(raw_key)
@@ -90,10 +97,36 @@ sequenceDiagram
             SP->>AW: build approximate cues
             AW-->>SP: approximate cues
         end
-        SP->>ASS: write(segments, short_N.ass)
-        ASS-->>SP: .ass written
-        SP-->>-VP: subtitle file ready
-        VP->>+FF: render split-screen and burn ASS
+        SP-->>VP: subtitle timeline
+        VP->>ASS: write(segments, short_N.ass)
+        ASS-->>VP: .ass written
+        opt broll.enabled
+            VP->>+BP: build(short_id, timeline, output_dir, target_size)
+            BP->>+ID: detect(timeline)
+            ID-->>-BP: impact beats
+            BP->>OL: load()
+            OL-->>BP: manual overrides
+            BP->>OR: resolve(short_id, timeline, beats, overrides)
+            OR-->>BP: manual selections
+            loop for each beat
+                alt manual override matched
+                    BP-->>BP: skip provider search for that beat
+                else automatic fallback
+                    BP->>QG: generate(beat)
+                    QG-->>BP: queries
+                    BP->>PR: search(beat, queries)
+                    PR-->>BP: candidates
+                end
+            end
+            BP->>BW: write impact/candidates/plan JSON
+            BW-->>BP: artifacts persisted
+            BP-->>-VP: ShortEditingPlan
+        end
+        VP->>+FF: render split-screen
+        opt plan has insertions
+            FF-->>FF: compose overlay/cutaway/full_frame_cutaway
+        end
+        FF-->>FF: burn ASS over composited video
         alt outro enabled
             FF-->>FF: append outro with fades
         end
