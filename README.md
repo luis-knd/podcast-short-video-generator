@@ -596,7 +596,7 @@ cambio, el mutante ha sido "asesinado" (lo cual es bueno). Si el test pasa a pes
 
 #### Ejecución
 
-1. **Ejecutar el análisis de mutación** (esto puede tardar varios minutos):
+1. **Ejecutar el análisis de mutación completo** (esto puede tardar varios minutos):
 
    ```bash
    mutmut run --CI --no-progress --simple-output
@@ -605,14 +605,32 @@ cambio, el mutante ha sido "asesinado" (lo cual es bueno). Si el test pasa a pes
    _Nota:_ `mutmut<3` no es estable en Python 3.14. Para correr esta validación localmente se recomienda un entorno
    con Python 3.11 o 3.12, o delegar la corrida completa al workflow de CI.
 
-2. **Generar el reporte visual (HTML)**:
+2. **Ejecutar solo sobre archivos o directorios específicos** (útil para desarrollo local iterativo):
+
+   ```bash
+   # Un solo archivo
+   mutmut run --CI --no-progress --simple-output --paths-to-mutate src/domain/value_objects.py
+
+   # Varios archivos
+   mutmut run --CI --no-progress --simple-output \
+     --paths-to-mutate src/domain/value_objects.py \
+     --paths-to-mutate src/domain/entities.py
+
+   # Un directorio completo
+   mutmut run --CI --no-progress --simple-output --paths-to-mutate src/application/broll/
+   ```
+
+   El flag `--paths-to-mutate` sobrescribe el valor por defecto de `setup.cfg` y permite acotar el scope sin editar la
+   configuración del proyecto.
+
+3. **Generar el reporte visual (HTML)**:
    Una vez terminada la ejecución, genera un reporte legible:
 
    ```bash
    mutmut html
    ```
 
-3. **Ver los resultados**:
+4. **Ver los resultados**:
    El comando anterior crea una carpeta llamada `html/` en la raíz del proyecto. Para ver el reporte detallado, abre el
 archivo:
    - **`html/index.html`** en tu navegador favorito.

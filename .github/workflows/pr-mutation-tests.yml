@@ -19,11 +19,11 @@ jobs:
   mutation_tests:
     if: ${{ github.event.pull_request.base.ref == github.event.repository.default_branch }}
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - uses: actions/setup-python@v6
         with:
@@ -36,14 +36,24 @@ jobs:
           pip install -r requirements.txt
 
       - name: Build mutation patch
+        id: patch
         run: |
           git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1
-          git diff --unified=0 "origin/${{ github.event.pull_request.base.ref }}...HEAD" > /tmp/mutmut.patch
+          git diff --unified=0 "origin/${{ github.event.pull_request.base.ref }}" HEAD -- src/ > /tmp/mutmut.patch
+          if [ ! -s /tmp/mutmut.patch ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Run mutation tests
+        if: steps.patch.outputs.skip == 'false'
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
         run: mutmut run --CI --no-progress --simple-output --use-patch-file /tmp/mutmut.patch
 
       - name: Check mutation coverage
+        if: steps.patch.outputs.skip == 'false'
         run: |
           SURVIVED=$(mutmut result-ids survived | wc -w | tr -d ' ')
           KILLED=$(mutmut result-ids killed | wc -w | tr -d ' ')
@@ -51,7 +61,7 @@ jobs:
           SUSPICIOUS=$(mutmut result-ids suspicious | wc -w | tr -d ' ')
           TOTAL=$((SURVIVED + KILLED + TIMEOUT + SUSPICIOUS))
 
-          if [ $TOTAL -eq 0 ]; then
+          if [ "$TOTAL" -eq 0 ]; then
             echo "No mutations found"
             exit 0
           fi
