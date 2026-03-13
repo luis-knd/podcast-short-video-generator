@@ -37,8 +37,9 @@ jobs:
 
       - name: Patch mutmut for src-as-package layout
         run: |
-          MUTMUT_MAIN=$(python3 -c "import mutmut.__main__; print(mutmut.__main__.__file__)")
-          sed -i "s/    assert not name.startswith('src.'), .*/    if name.startswith('src.'):\n        name = name[len('src.'):]/" "$MUTMUT_MAIN"
+          MUTMUT_PKG=$(python3 -c "import mutmut; print(mutmut.__file__.rsplit('/',1)[0])")
+          sed -i "s/    assert not name.startswith('src.'), .*/    if name.startswith('src.'):\n        name = name[len('src.'):]/" "$MUTMUT_PKG/__main__.py"
+          sed -i "s/orig\.__module__/orig.__module__.removeprefix('src.')/g" "$MUTMUT_PKG/trampoline_templates.py"
 
       - name: Detect changed source files
         id: changed
