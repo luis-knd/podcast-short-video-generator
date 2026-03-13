@@ -49,6 +49,7 @@ coverage.xml
 .pytest_cache/
 cover/
 .mutmut-cache
+mutants/
 mutmut_results.txt
 mutmut_results_current.txt
 surviving_mutants.txt

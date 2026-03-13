@@ -19,11 +19,11 @@ jobs:
   mutation_tests:
     if: ${{ github.event.pull_request.base.ref == github.event.repository.default_branch }}
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - uses: actions/setup-python@v6
         with:
@@ -35,42 +35,77 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Build mutation patch
-        id: patch
+      - name: Patch mutmut for src-as-package layout
         run: |
-          git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1
-          git diff --unified=0 "origin/${{ github.event.pull_request.base.ref }}" HEAD -- src/ > /tmp/mutmut.patch
-          if [ ! -s /tmp/mutmut.patch ]; then
+          MUTMUT_MAIN=$(python3 -c "import mutmut.__main__; print(mutmut.__main__.__file__)")
+          sed -i "s/    assert not name.startswith('src.'), .*/    if name.startswith('src.'):\n        name = name[len('src.'):]/" "$MUTMUT_MAIN"
+
+      - name: Detect changed source files
+        id: changed
+        run: |
+          BASE="origin/${{ github.event.pull_request.base.ref }}"
+          CHANGED=$(git diff --name-only --diff-filter=ACMR "$BASE" HEAD -- 'src/' | grep '\.py$' || true)
+          if [ -z "$CHANGED" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "$CHANGED" > /tmp/changed_src_files.txt
+            echo "Changed source files:"
+            cat /tmp/changed_src_files.txt
           fi
+
+      - name: Scope mutations to changed files
+        if: steps.changed.outputs.skip == 'false'
+        run: |
+          python3 << 'PYEOF'
+          import configparser, pathlib
+
+          changed = pathlib.Path('/tmp/changed_src_files.txt').read_text().strip().splitlines()
+          changed = [f for f in changed if f]
+
+          cfg = configparser.ConfigParser()
+          cfg.read('setup.cfg')
+          cfg.set('mutmut', 'paths_to_mutate', '\n' + '\n'.join(changed))
+
+          with open('setup.cfg', 'w') as f:
+              cfg.write(f)
+
+          print("Scoped [mutmut] paths_to_mutate:")
+          for p in changed:
+              print(f"  {p}")
+          PYEOF
 
       - name: Run mutation tests
-        if: steps.patch.outputs.skip == 'false'
+        if: steps.changed.outputs.skip == 'false'
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-        run: mutmut run --CI --no-progress --simple-output --use-patch-file /tmp/mutmut.patch
+        run: mutmut run
 
       - name: Check mutation coverage
-        if: steps.patch.outputs.skip == 'false'
+        if: steps.changed.outputs.skip == 'false'
         run: |
-          SURVIVED=$(mutmut result-ids survived | wc -w | tr -d ' ')
-          KILLED=$(mutmut result-ids killed | wc -w | tr -d ' ')
-          TIMEOUT=$(mutmut result-ids timeout | wc -w | tr -d ' ')
-          SUSPICIOUS=$(mutmut result-ids suspicious | wc -w | tr -d ' ')
-          TOTAL=$((SURVIVED + KILLED + TIMEOUT + SUSPICIOUS))
+          mutmut export-cicd-stats
+          python3 << 'PYEOF'
+          import json, sys
 
-          if [ "$TOTAL" -eq 0 ]; then
-            echo "No mutations found"
-            exit 0
-          fi
+          with open('mutants/mutmut-cicd-stats.json') as f:
+              stats = json.load(f)
 
-          SCORE=$(awk "BEGIN {printf \"%.2f\", ($KILLED + $TIMEOUT) * 100 / $TOTAL}")
-          echo "Mutation score: $SCORE%"
-          echo "Killed: $KILLED, Survived: $SURVIVED, Timeout: $TIMEOUT, Suspicious: $SUSPICIOUS"
+          killed = stats.get('killed', 0)
+          survived = stats.get('survived', 0)
+          timeout = stats.get('timeout', 0)
+          suspicious = stats.get('suspicious', 0)
+          total = killed + survived + timeout + suspicious
 
-          if (( $(echo "$SCORE < 90" | bc -l) )); then
-            echo "ERROR: Mutation coverage $SCORE% is below 90%"
-            exit 1
-          fi
+          if total == 0:
+              print('No mutations found')
+              sys.exit(0)
+
+          score = (killed + timeout) * 100 / total
+          print(f'Mutation score: {score:.2f}%')
+          print(f'Killed: {killed}, Survived: {survived}, Timeout: {timeout}, Suspicious: {suspicious}')
+
+          if score < 90:
+              print(f'ERROR: Mutation coverage {score:.2f}% is below 90%')
+              sys.exit(1)
+          PYEOF
