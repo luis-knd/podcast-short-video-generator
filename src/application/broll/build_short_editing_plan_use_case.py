@@ -14,6 +14,8 @@ from src.domain.subtitle_models import SubtitleTimeline
 
 
 class BuildShortEditingPlanUseCase:
+    DEFAULT_ENABLED = False
+
     def __init__(
         self,
         providers: tuple[IBrollAssetProvider, ...],
@@ -24,7 +26,7 @@ class BuildShortEditingPlanUseCase:
         insertion_planner: BrollInsertionPlanner | None = None,
         manual_override_loader=None,
         manual_override_resolver: ManualBrollOverrideResolver | None = None,
-        enabled: bool = False,
+        enabled: bool | None = None,
     ):
         self.providers = providers
         self.plan_writer = plan_writer
@@ -34,7 +36,7 @@ class BuildShortEditingPlanUseCase:
         self.insertion_planner = insertion_planner or BrollInsertionPlanner()
         self.manual_override_loader = manual_override_loader
         self.manual_override_resolver = manual_override_resolver or ManualBrollOverrideResolver()
-        self.enabled = enabled
+        self.enabled = self.DEFAULT_ENABLED if enabled is None else enabled
 
     def build(
         self,
@@ -64,17 +66,16 @@ class BuildShortEditingPlanUseCase:
             overrides=self._load_manual_overrides(),
         )
         manual_selections_by_beat = {selection.beat.beat_id: selection for selection in manual_override_selections}
-        automatic_target_insertions = self._automatic_target_insertions(
-            timeline.duration_ms,
-            manual_override_count=len(manual_override_selections),
-        )
 
         automatic_selections: list[BeatCandidateSelection] = []
         candidate_payloads: list[dict[str, object]] = []
         providers_by_name = {
             provider.__class__.__name__.replace("Provider", "").lower(): provider for provider in self.providers
         }
-        providers_by_name.update({getattr(provider, "provider_name", ""): provider for provider in self.providers})
+        for provider in self.providers:
+            provider_name = getattr(provider, "provider_name", None)
+            if provider_name:
+                providers_by_name[provider_name] = provider
 
         for beat in beats:
             manual_selection = manual_selections_by_beat.get(beat.beat_id)
@@ -116,7 +117,6 @@ class BuildShortEditingPlanUseCase:
 
         automatic_selections = self._prioritize_automatic_selections(
             selections=automatic_selections,
-            automatic_target_insertions=automatic_target_insertions,
         )
 
         beat_candidates: list[BeatCandidateSelection] = list(automatic_selections)
@@ -159,9 +159,7 @@ class BuildShortEditingPlanUseCase:
     def _prioritize_automatic_selections(
         self,
         selections: list[BeatCandidateSelection],
-        automatic_target_insertions: int,
     ) -> list[BeatCandidateSelection]:
-        del automatic_target_insertions
         if not selections:
             return []
 
@@ -199,18 +197,6 @@ class BuildShortEditingPlanUseCase:
             anchor_text=selection.anchor_text,
             selection_source=selection.selection_source,
         )
-
-    def _has_usable_local_candidate(self, selection: BeatCandidateSelection) -> bool:
-        for candidate in selection.candidates:
-            if candidate.discovery_source not in {"local_manifest", "local_heuristic_fallback"}:
-                continue
-            if self.insertion_planner.is_candidate_usable(
-                beat=selection.beat,
-                candidate=candidate,
-                selection_source=selection.selection_source,
-            ):
-                return True
-        return False
 
     @staticmethod
     def _prepare_candidates(

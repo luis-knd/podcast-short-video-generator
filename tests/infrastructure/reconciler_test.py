@@ -1,5 +1,6 @@
 from src.domain.subtitle_models import AlignedWord, SubtitleCue
 from src.infrastructure.subtitles.reconciler import TranscriptReconciler
+from tests.infrastructure.reconciler_support_test import run_reconcile_with_watchdog
 
 
 def test_reconciler_preserves_display_text_and_uses_aligned_times():
@@ -16,7 +17,7 @@ def test_reconciler_preserves_display_text_and_uses_aligned_times():
         AlignedWord("world", "world", 320, 600, 0.95),
     ]
 
-    reconciled_cues, quality = reconciler.reconcile([cue], aligned_words)
+    reconciled_cues, quality = run_reconcile_with_watchdog(reconciler, [cue], aligned_words)
 
     assert len(reconciled_cues) == 1
     assert reconciled_cues[0].timing_mode == "reconciled_asr"
@@ -37,7 +38,7 @@ def test_reconciler_falls_back_to_approximate_when_match_ratio_is_low():
     )
     aligned_words = [AlignedWord("noise", "noise", 100, 200, 0.1)]
 
-    reconciled_cues, quality = reconciler.reconcile([cue], aligned_words)
+    reconciled_cues, quality = run_reconcile_with_watchdog(reconciler, [cue], aligned_words)
 
     assert reconciled_cues[0].timing_mode == "approximate"
     assert all(word.fallback_used for word in reconciled_cues[0].words)
@@ -58,7 +59,7 @@ def test_reconciler_interpolates_unmatched_words_and_uses_fuzzy_matches():
         AlignedWord("wurld", "wurld", 500, 780, 0.7),
     ]
 
-    reconciled_cues, quality = reconciler.reconcile([cue], aligned_words)
+    reconciled_cues, quality = run_reconcile_with_watchdog(reconciler, [cue], aligned_words)
     words = reconciled_cues[0].words
 
     assert reconciled_cues[0].timing_mode == "reconciled_asr"
@@ -82,7 +83,7 @@ def test_reconciler_handles_empty_and_edge_interpolation_spans():
         end_ms=100,
     )
 
-    reconciled_cues, quality = reconciler.reconcile([empty_cue], [])
+    reconciled_cues, quality = run_reconcile_with_watchdog(reconciler, [empty_cue], [])
 
     assert reconciled_cues[0].timing_mode == "approximate"
     assert reconciled_cues[0].words == ()
@@ -97,7 +98,7 @@ def test_reconciler_handles_empty_and_edge_interpolation_spans():
     )
     aligned_words = [AlignedWord("hello", "hello", 0, 1000, 0.8)]
 
-    edge_reconciled, _ = reconciler.reconcile([edge_cue], aligned_words)
+    edge_reconciled, _ = run_reconcile_with_watchdog(reconciler, [edge_cue], aligned_words)
     edge_words = edge_reconciled[0].words
 
     assert edge_words[0].source == "interpolated"
@@ -139,7 +140,7 @@ def test_reconciler_defaults_candidate_window_and_quality_contract():
         "after-edge",
     ]
 
-    reconciled_cues, quality = reconciler.reconcile([cue], aligned_words)
+    reconciled_cues, quality = run_reconcile_with_watchdog(reconciler, [cue], aligned_words)
 
     assert reconciled_cues[0].quality_score == 1.0
     assert quality == {
@@ -179,7 +180,7 @@ def test_reconciler_accumulates_quality_across_multiple_cues():
         AlignedWord("world", "world", 260, 450, 0.85),
     ]
 
-    reconciled_cues, quality = reconciler.reconcile(cues, aligned_words)
+    reconciled_cues, quality = run_reconcile_with_watchdog(reconciler, cues, aligned_words)
 
     assert [cue.timing_mode for cue in reconciled_cues] == [
         "reconciled_asr",
@@ -204,7 +205,7 @@ def test_reconciler_accepts_fuzzy_match_exactly_at_threshold():
     )
     aligned_words = [AlignedWord("wurld", "wurld", 100, 250, 0.7)]
 
-    reconciled_cues, _ = reconciler.reconcile([cue], aligned_words)
+    reconciled_cues, _ = run_reconcile_with_watchdog(reconciler, [cue], aligned_words)
 
     assert reconciled_cues[0].timing_mode == "reconciled_asr"
     assert reconciled_cues[0].words[0].match_method == "fuzzy_normalized"

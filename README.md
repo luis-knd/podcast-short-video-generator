@@ -587,53 +587,77 @@ pytest tests/ --cov=src --cov-report=term-missing --cov-branch --cov-fail-under=
 ### Pruebas de Mutación
 
 Para asegurar que nuestros tests no solo cubran el código, sino que sean **efectivos** detectando errores, utilizamos
-**Mutation Testing** con la herramienta `mutmut`.
+**Mutation Testing** con la herramienta `mutmut` `>=3,<4`.
 
 A diferencia de la cobertura tradicional, las pruebas de mutación introducen pequeños cambios (mutaciones) en el código
 fuente para verificar si los tests existentes son capaces de detectarlos y fallar. Si un test falla al detectar un
 cambio, el mutante ha sido "asesinado" (lo cual es bueno). Si el test pasa a pesar del cambio, el mutante "sobrevive"
 (indicando que el test es débil).
 
-#### Ejecución
+#### Configuración actual del proyecto
 
-1. **Ejecutar el análisis de mutación completo** (esto puede tardar varios minutos):
+- `requirements.txt` instala `mutmut` `>=3,<4`.
+- `setup.cfg` define:
+  - `paths_to_mutate=src/`
+  - `tests_dir=tests/`
+  - `also_copy=src/` y `config.json` para que `mutmut` pueda ejecutar los mutantes dentro del directorio `mutants/`.
+- `conftest.py` aplica un parche de compatibilidad para el layout `src/` como paquete Python.
+- El workflow `pr-mutation-tests.yml` no muta todo el proyecto en cada PR:
+  - detecta solo archivos `.py` modificados dentro de `src/`
+  - reescribe `paths_to_mutate` temporalmente en CI
+  - parchea `mutmut` en runtime para el layout `src/` como paquete
+  - corre `mutmut run`
+  - exporta métricas con `mutmut export-cicd-stats`
+  - falla el job si el score es menor a `90%`
 
-   ```bash
-   mutmut run --CI --no-progress --simple-output
-   ```
+#### Ejecución local
 
-   _Nota:_ `mutmut<3` no es estable en Python 3.14. Para correr esta validación localmente se recomienda un entorno
-   con Python 3.11 o 3.12, o delegar la corrida completa al workflow de CI.
-
-2. **Ejecutar solo sobre archivos o directorios específicos** (útil para desarrollo local iterativo):
-
-   ```bash
-   # Un solo archivo
-   mutmut run --CI --no-progress --simple-output --paths-to-mutate src/domain/value_objects.py
-
-   # Varios archivos
-   mutmut run --CI --no-progress --simple-output \
-     --paths-to-mutate src/domain/value_objects.py \
-     --paths-to-mutate src/domain/entities.py
-
-   # Un directorio completo
-   mutmut run --CI --no-progress --simple-output --paths-to-mutate src/application/broll/
-   ```
-
-   El flag `--paths-to-mutate` sobrescribe el valor por defecto de `setup.cfg` y permite acotar el scope sin editar la
-   configuración del proyecto.
-
-3. **Generar el reporte visual (HTML)**:
-   Una vez terminada la ejecución, genera un reporte legible:
+1. **Ejecutar el análisis de mutación**:
 
    ```bash
-   mutmut html
+   mutmut run
    ```
 
-4. **Ver los resultados**:
-   El comando anterior crea una carpeta llamada `html/` en la raíz del proyecto. Para ver el reporte detallado, abre el
-archivo:
-   - **`html/index.html`** en tu navegador favorito.
+   Esto crea el directorio `mutants/` y procesa los mutantes definidos por `setup.cfg`.
+
+2. **Ver el resumen de resultados**:
+
+   ```bash
+   mutmut results
+   ```
+
+3. **Inspeccionar un mutante concreto**:
+
+   ```bash
+   mutmut show <mutant_name>
+   ```
+
+4. **Exportar estadísticas para CI o análisis automatizado**:
+
+   ```bash
+   mutmut export-cicd-stats
+   ```
+
+   Este comando genera `mutants/mutmut-cicd-stats.json`, que es el archivo que utiliza el workflow de GitHub Actions
+   para calcular el score de mutación.
+
+5. **Explorar los resultados visualmente** (incluido en `mutmut` v3):
+
+   ```bash
+   mutmut browse
+   ```
+
+   Lanza un servidor web local con una interfaz navegable que muestra el estado de cada mutante (sobreviviente,
+   eliminado, error) junto al diff del cambio introducido. Es la forma más cómoda de identificar qué mutantes
+   sobreviven y qué assertions faltan en la suite.
+
+   Para incluir también los mutantes ya eliminados:
+
+   ```bash
+   mutmut browse --show-killed
+   ```
+
+   > No requiere dependencia adicional; `mutmut browse` viene incluido en `mutmut>=3`.
 
 ### Calidad estática
 

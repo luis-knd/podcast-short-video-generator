@@ -138,3 +138,47 @@ def test_faster_whisper_aligner_uses_expected_defaults_and_transcribe_arguments(
     assert payload["metadata"]["compute_type"] == "int8"
     assert payload["metadata"]["language"] == "pt"
     assert payload["words"] == []
+
+
+def test_faster_whisper_aligner_default_init_parameters_exact_values():
+    import inspect
+
+    sig = inspect.signature(FasterWhisperWordAligner.__init__)
+    params = sig.parameters
+
+    assert params["model_size"].default == "base"
+    assert params["compute_type"].default == "int8"
+    assert params["beam_size"].default == 5
+    assert params["vad_filter"].default is True
+
+
+def test_faster_whisper_aligner_passes_language_from_self_to_transcribe():
+    aligner = FasterWhisperWordAligner(language="es")
+    captured: dict[str, object] = {}
+
+    class FakeModel:
+        @staticmethod
+        def transcribe(media_filepath, **kwargs):
+            captured.update(kwargs)
+            return ([], SimpleNamespace(language="es"))
+
+    aligner._model = FakeModel()
+
+    aligner.align("clip.mp4")
+
+    assert captured["language"] == "es"
+
+
+def test_faster_whisper_aligner_segment_words_none_falls_back_to_empty_list():
+    aligner = FasterWhisperWordAligner()
+
+    class FakeModel:
+        @staticmethod
+        def transcribe(*_args, **_kwargs):
+            return ([SimpleNamespace()], SimpleNamespace(language=None))
+
+    aligner._model = FakeModel()
+
+    payload = aligner.align("clip.mp4")
+
+    assert payload["words"] == []

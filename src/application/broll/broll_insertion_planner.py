@@ -12,25 +12,53 @@ from src.domain.subtitle_models import SubtitleTimeline
 
 
 class BrollInsertionPlanner:
+    DEFAULT_MINIMUM_GAP_MS = 4500
+    DEFAULT_BEAT_SCORE_THRESHOLD = 0.68
+    DEFAULT_CUTAWAY_SCORE_THRESHOLD = 0.82
+    DEFAULT_MINIMUM_CANDIDATE_SCORE = 0.55
+    DEFAULT_OVERLAY_TOP_Y = 120
+    DEFAULT_SUPPORT_BEAT_SCORE_THRESHOLD = 0.30
+    DEFAULT_AUTOMATIC_CANDIDATE_SEMANTIC_MATCH_THRESHOLD = 0.30
+    DEFAULT_SUPPORT_CANDIDATE_SEMANTIC_MATCH_THRESHOLD = 0.45
+    DEFAULT_SELECTION_SOURCE = "automatic"
+
     def __init__(
         self,
-        minimum_gap_ms: int = 4500,
-        beat_score_threshold: float = 0.68,
-        cutaway_score_threshold: float = 0.82,
-        minimum_candidate_score: float = 0.55,
-        overlay_top_y: int = 120,
-        support_beat_score_threshold: float = 0.30,
-        automatic_candidate_semantic_match_threshold: float = 0.30,
-        support_candidate_semantic_match_threshold: float = 0.45,
+        minimum_gap_ms: int | None = None,
+        beat_score_threshold: float | None = None,
+        cutaway_score_threshold: float | None = None,
+        minimum_candidate_score: float | None = None,
+        overlay_top_y: int | None = None,
+        support_beat_score_threshold: float | None = None,
+        automatic_candidate_semantic_match_threshold: float | None = None,
+        support_candidate_semantic_match_threshold: float | None = None,
     ):
-        self.minimum_gap_ms = minimum_gap_ms
-        self.beat_score_threshold = beat_score_threshold
-        self.cutaway_score_threshold = cutaway_score_threshold
-        self.minimum_candidate_score = minimum_candidate_score
-        self.overlay_top_y = overlay_top_y
-        self.support_beat_score_threshold = support_beat_score_threshold
-        self.automatic_candidate_semantic_match_threshold = automatic_candidate_semantic_match_threshold
-        self.support_candidate_semantic_match_threshold = support_candidate_semantic_match_threshold
+        self.minimum_gap_ms = self.DEFAULT_MINIMUM_GAP_MS if minimum_gap_ms is None else minimum_gap_ms
+        self.beat_score_threshold = (
+            self.DEFAULT_BEAT_SCORE_THRESHOLD if beat_score_threshold is None else beat_score_threshold
+        )
+        self.cutaway_score_threshold = (
+            self.DEFAULT_CUTAWAY_SCORE_THRESHOLD if cutaway_score_threshold is None else cutaway_score_threshold
+        )
+        self.minimum_candidate_score = (
+            self.DEFAULT_MINIMUM_CANDIDATE_SCORE if minimum_candidate_score is None else minimum_candidate_score
+        )
+        self.overlay_top_y = self.DEFAULT_OVERLAY_TOP_Y if overlay_top_y is None else overlay_top_y
+        self.support_beat_score_threshold = (
+            self.DEFAULT_SUPPORT_BEAT_SCORE_THRESHOLD
+            if support_beat_score_threshold is None
+            else support_beat_score_threshold
+        )
+        self.automatic_candidate_semantic_match_threshold = (
+            self.DEFAULT_AUTOMATIC_CANDIDATE_SEMANTIC_MATCH_THRESHOLD
+            if automatic_candidate_semantic_match_threshold is None
+            else automatic_candidate_semantic_match_threshold
+        )
+        self.support_candidate_semantic_match_threshold = (
+            self.DEFAULT_SUPPORT_CANDIDATE_SEMANTIC_MATCH_THRESHOLD
+            if support_candidate_semantic_match_threshold is None
+            else support_candidate_semantic_match_threshold
+        )
 
     def plan(
         self,
@@ -51,7 +79,7 @@ class BrollInsertionPlanner:
         ordered_selections = sorted(
             beat_candidates,
             key=lambda selection: (
-                0 if self._is_manual_selection(selection) else 1,
+                not self._is_manual_selection(selection),
                 -selection.priority,
                 -selection.beat.scores.total,
                 selection.beat.start_ms,
@@ -221,8 +249,8 @@ class BrollInsertionPlanner:
 
     @staticmethod
     def _mode_for_candidate(beat: ImpactBeat, candidate: BrollCandidate) -> str:
-        del beat
-        del candidate
+        if beat is None or candidate is None:
+            raise ValueError("beat and candidate are required to resolve insertion mode")
         return "full_frame_cutaway"
 
     @staticmethod
@@ -266,12 +294,13 @@ class BrollInsertionPlanner:
         self,
         beat: ImpactBeat,
         candidate: BrollCandidate,
-        selection_source: str = "automatic",
+        selection_source: str | None = None,
     ) -> bool:
+        effective_selection_source = self.DEFAULT_SELECTION_SOURCE if selection_source is None else selection_source
         if candidate.total_score < self.minimum_candidate_score or not candidate.local_path:
             return False
 
-        if selection_source == "manual_override":
+        if effective_selection_source == "manual_override":
             return True
 
         return candidate.semantic_match >= self._semantic_floor_for_beat(beat)
@@ -294,7 +323,8 @@ class BrollInsertionPlanner:
         current_insertions: int,
         target_insertions: int,
     ) -> bool:
-        del candidate
+        if candidate is None:
+            return False
         if self._is_strong_automatic_beat(beat):
             return True
 
@@ -308,12 +338,14 @@ class BrollInsertionPlanner:
 
     @staticmethod
     def _minimum_start_ms_for_mode(mode: str) -> int:
-        del mode
+        if mode not in {"overlay", "cutaway", "full_frame_cutaway"}:
+            raise ValueError(f"unsupported b-roll insertion mode: {mode}")
         return 500
 
     @staticmethod
     def _maximum_end_ms_for_mode(mode: str, timeline_duration_ms: int) -> int:
-        del mode
+        if mode not in {"overlay", "cutaway", "full_frame_cutaway"}:
+            raise ValueError(f"unsupported b-roll insertion mode: {mode}")
         return timeline_duration_ms - 250
 
     @staticmethod

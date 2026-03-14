@@ -6,6 +6,15 @@ from src.domain.text_utils import normalize_token
 
 
 class ImpactBeatDetector:
+    DEFAULT_MINIMUM_SCORE = 0.68
+    DEFAULT_MINIMUM_VISUALIZABILITY = 0.35
+    DEFAULT_MINIMUM_TIMING_CONFIDENCE = 0.55
+    DEFAULT_MIN_DURATION_MS = 700
+    DEFAULT_MAX_DURATION_MS = 3000
+    DEFAULT_FALLBACK_MINIMUM_SCORE = 0.58
+    DEFAULT_FALLBACK_MINIMUM_SEMANTIC_SALIENCE = 0.55
+    DEFAULT_MINIMUM_TIMELINE_QUALITY_FOR_FALLBACK = 0.85
+
     STOPWORDS = {
         "a",
         "al",
@@ -220,23 +229,37 @@ class ImpactBeatDetector:
 
     def __init__(
         self,
-        minimum_score: float = 0.68,
-        minimum_visualizability: float = 0.35,
-        minimum_timing_confidence: float = 0.55,
-        min_duration_ms: int = 700,
-        max_duration_ms: int = 3000,
-        fallback_minimum_score: float = 0.58,
-        fallback_minimum_semantic_salience: float = 0.55,
-        minimum_timeline_quality_for_fallback: float = 0.85,
+        minimum_score: float | None = None,
+        minimum_visualizability: float | None = None,
+        minimum_timing_confidence: float | None = None,
+        min_duration_ms: int | None = None,
+        max_duration_ms: int | None = None,
+        fallback_minimum_score: float | None = None,
+        fallback_minimum_semantic_salience: float | None = None,
+        minimum_timeline_quality_for_fallback: float | None = None,
     ):
-        self.minimum_score = minimum_score
-        self.minimum_visualizability = minimum_visualizability
-        self.minimum_timing_confidence = minimum_timing_confidence
-        self.min_duration_ms = min_duration_ms
-        self.max_duration_ms = max_duration_ms
-        self.fallback_minimum_score = fallback_minimum_score
-        self.fallback_minimum_semantic_salience = fallback_minimum_semantic_salience
-        self.minimum_timeline_quality_for_fallback = minimum_timeline_quality_for_fallback
+        self.minimum_score = self.DEFAULT_MINIMUM_SCORE if minimum_score is None else minimum_score
+        self.minimum_visualizability = (
+            self.DEFAULT_MINIMUM_VISUALIZABILITY if minimum_visualizability is None else minimum_visualizability
+        )
+        self.minimum_timing_confidence = (
+            self.DEFAULT_MINIMUM_TIMING_CONFIDENCE if minimum_timing_confidence is None else minimum_timing_confidence
+        )
+        self.min_duration_ms = self.DEFAULT_MIN_DURATION_MS if min_duration_ms is None else min_duration_ms
+        self.max_duration_ms = self.DEFAULT_MAX_DURATION_MS if max_duration_ms is None else max_duration_ms
+        self.fallback_minimum_score = (
+            self.DEFAULT_FALLBACK_MINIMUM_SCORE if fallback_minimum_score is None else fallback_minimum_score
+        )
+        self.fallback_minimum_semantic_salience = (
+            self.DEFAULT_FALLBACK_MINIMUM_SEMANTIC_SALIENCE
+            if fallback_minimum_semantic_salience is None
+            else fallback_minimum_semantic_salience
+        )
+        self.minimum_timeline_quality_for_fallback = (
+            self.DEFAULT_MINIMUM_TIMELINE_QUALITY_FOR_FALLBACK
+            if minimum_timeline_quality_for_fallback is None
+            else minimum_timeline_quality_for_fallback
+        )
 
     def detect(self, timeline: SubtitleTimeline) -> list[ImpactBeat]:
         ranked_beats = self.detect_candidates(timeline)

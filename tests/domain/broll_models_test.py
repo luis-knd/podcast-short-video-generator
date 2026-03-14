@@ -1,4 +1,11 @@
-from src.domain.broll_models import BeatScoreBreakdown, BrollCandidate, BrollInsertion, ImpactBeat, ShortEditingPlan
+from src.domain.broll_models import (
+    BeatScoreBreakdown,
+    BrollCandidate,
+    BrollInsertion,
+    ImpactBeat,
+    ShortEditingPlan,
+    SkippedBeat,
+)
 
 
 def test_broll_models_to_dict_keep_expected_shape():
@@ -69,3 +76,37 @@ def test_broll_models_to_dict_keep_expected_shape():
     assert candidate.to_dict()["tags"] == ["office", "launch"]
     assert insertion.to_dict()["placement"]["opacity"] == 0.96
     assert plan.to_dict()["insertions"][0]["trim"]["asset_out_ms"] == 1800
+
+
+def test_broll_models_include_optional_anchor_and_skipped_beats():
+    insertion = BrollInsertion(
+        insertion_id="insert-0002",
+        beat_id="beat-0002",
+        mode="full_frame_cutaway",
+        asset_provider="manual_override",
+        asset_path="inputs/broll/library/portrait/woman-smiling.mp4",
+        start_ms=1200,
+        end_ms=2600,
+        source_beat_score=1.0,
+        candidate_score=1.0,
+        x=0,
+        y=0,
+        width=1080,
+        height=1920,
+        opacity=1.0,
+        asset_in_ms=0,
+        asset_out_ms=1400,
+        anchor_text="woman smiling",
+    )
+    plan = ShortEditingPlan(
+        short_id="short_9",
+        enabled=True,
+        strategy_version="broll-plan-v1",
+        insertions=(insertion,),
+        skipped_beats=(SkippedBeat(beat_id="beat-0003", reason="no_candidate"),),
+    )
+
+    payload = plan.to_dict()
+
+    assert payload["insertions"][0]["anchor_text"] == "woman smiling"
+    assert payload["skipped_beats"] == [{"beat_id": "beat-0003", "reason": "no_candidate"}]

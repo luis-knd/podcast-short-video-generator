@@ -175,6 +175,146 @@ def test_candidate_ranker_prefers_vertical_pexels_when_semantics_are_comparable(
     assert ranked[0].total_score > ranked[1].total_score
 
 
+def test_candidate_ranker_diversity_bonus_is_point10_with_tags_and_point05_without():
+    ranker = BrollCandidateRanker()
+    beat = _build_beat("office workspace")
+
+    ranked = ranker.rank(
+        beat,
+        ("office",),
+        [
+            _build_candidate(
+                "with-tags",
+                "office workspace",
+                "https://x.com/c.mp4",
+                ("office",),
+                2000,
+                720,
+                1280,
+                "vertical",
+                "/tmp/a.mp4",
+            ),
+            _build_candidate("no-tags", "", "https://x.com/d.mp4", (), 2000, 720, 1280, "vertical", "/tmp/b.mp4"),
+        ],
+    )
+
+    with_tags = next(c for c in ranked if c.candidate_id == "with-tags")
+    without_tags = next(c for c in ranked if c.candidate_id == "no-tags")
+    assert with_tags.diversity_bonus == 0.10
+    assert without_tags.diversity_bonus == 0.05
+
+
+@pytest.mark.parametrize(
+    ("provider", "orientation", "expected_bonus"),
+    [
+        ("pexels", "vertical", 0.03),
+        ("pixabay", "landscape", -0.01),
+        ("local", "vertical", 0.0),
+        ("pexels", "landscape", 0.0),
+    ],
+)
+def test_candidate_ranker_source_preference_bonus_is_added_to_total_score(provider, orientation, expected_bonus):
+    ranker = BrollCandidateRanker()
+    beat = _build_beat("office workspace")
+
+    ranked = ranker.rank(
+        beat,
+        ("office workspace",),
+        [
+            _build_candidate(
+                "cand",
+                "office workspace",
+                "https://cdn.example/clip.mp4",
+                ("office", "workspace"),
+                5000,
+                720,
+                1280,
+                orientation,
+                "/tmp/cand.mp4",
+                provider=provider,
+                discovery_source=provider,
+            )
+        ],
+    )
+
+    c = ranked[0]
+    score_without_bonus = round(
+        0.40 * c.semantic_match
+        + 0.20 * c.visual_fit
+        + 0.15 * c.duration_fit
+        + 0.10 * c.orientation_fit
+        + 0.10 * c.diversity_bonus
+        + 0.05 * c.technical_quality,
+        4,
+    )
+    assert abs(c.total_score - (score_without_bonus + expected_bonus)) < 0.0005
+
+
+def test_candidate_ranker_total_score_uses_exact_weight_coefficients():
+    ranker = BrollCandidateRanker()
+    beat = _build_beat("office workspace")
+
+    ranked = ranker.rank(
+        beat,
+        ("office workspace",),
+        [
+            _build_candidate(
+                "scored",
+                "office workspace",
+                "https://cdn.example/clip.mp4",
+                ("office", "workspace"),
+                5000,
+                1280,
+                720,
+                "vertical",
+                "/tmp/scored.mp4",
+                provider="pexels",
+                discovery_source="pexels",
+            )
+        ],
+    )
+
+    c = ranked[0]
+    assert c.semantic_match == 1.0
+    assert c.visual_fit == 0.95
+    assert c.duration_fit == 1.0
+    assert c.orientation_fit == 1.0
+    assert c.diversity_bonus == 0.10
+    assert c.technical_quality == 0.80
+    expected = round(
+        0.40 * 1.0 + 0.20 * 0.95 + 0.15 * 1.0 + 0.10 * 1.0 + 0.10 * 0.10 + 0.05 * 0.80 + 0.03,
+        4,
+    )
+    assert c.total_score == pytest.approx(expected, abs=1e-4)
+
+
+def test_candidate_ranker_total_score_rounds_to_four_decimal_places():
+    ranker = BrollCandidateRanker()
+    beat = _build_beat("alpha beta gamma")
+
+    ranked = ranker.rank(
+        beat,
+        ("alpha beta gamma",),
+        [
+            _build_candidate(
+                "landscape-cand",
+                "alpha",
+                "https://cdn.example/clip.mp4",
+                (),
+                5000,
+                320,
+                240,
+                "landscape",
+                "/tmp/lc.mp4",
+            )
+        ],
+    )
+
+    c = ranked[0]
+    assert c.semantic_match == 0.3333
+    assert c.total_score == 0.5273
+
+
 def _build_beat(text: str) -> ImpactBeat:
     return ImpactBeat(
         beat_id="beat-1",

@@ -137,10 +137,10 @@ class BrollQueryGenerator:
     def _semantic_tokens(self, tokens: list[str]) -> list[str]:
         token_set = set(tokens)
         if "confusing" in token_set and {"negative", "negatives"} & token_set:
-            return ["confused", "person", "complex", "text"]
-        if ("polluted" in token_set and {"mind", "mind's"} & token_set) or (
-            "negative" in token_set and "thoughts" in token_set
-        ):
+            return ["confused", "person", "negative", "spiral"]
+        if "polluted" in token_set and {"mind", "mind's"} & token_set:
+            return ["stressed", "person", "thinking", "alone"]
+        if "negative" in token_set and "thoughts" in token_set:
             return ["stressed", "person", "thinking", "alone"]
 
         semantic_tokens: list[str] = []
