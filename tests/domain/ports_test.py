@@ -2,7 +2,7 @@ import inspect
 
 import pytest
 
-from src.domain.ports import IVideoProcessor
+from src.domain.ports import IBrollAssetProvider, IVideoProcessor
 
 
 def test_ivideoprocessor_is_abstract():
@@ -15,3 +15,8 @@ def test_ivideoprocessor_generate_short_signature_defaults():
 
     assert signature.parameters["outro_filepath"].default is None
     assert signature.parameters["fade_duration"].default == 0.7
+
+
+def test_ibrollassetprovider_is_abstract():
+    with pytest.raises(TypeError, match="Can't instantiate abstract class"):
+        IBrollAssetProvider()

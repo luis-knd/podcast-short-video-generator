@@ -1,0 +1,165 @@
+from src.domain.subtitle_models import AlignedWord, SubtitleCue
+from src.infrastructure.subtitles.reconciler import TranscriptReconciler
+from tests.infrastructure.reconciler_support_test import run_reconcile_with_watchdog
+
+
+def _cue(
+    text: str, *, cue_id: str = "cue-1", speaker: str = "Speaker 1", start_ms: int = 0, end_ms: int = 1000
+) -> SubtitleCue:
+    return SubtitleCue(
+        cue_id=cue_id,
+        speaker=speaker,
+        text=text,
+        start_ms=start_ms,
+        end_ms=end_ms,
+    )
+
+
+def _word(
+    text: str,
+    start_ms: int,
+    end_ms: int,
+    *,
+    normalized_text: str | None = None,
+    confidence: float = 0.9,
+) -> AlignedWord:
+    return AlignedWord(
+        text=text,
+        normalized_text=normalized_text or text.lower(),
+        start_ms=start_ms,
+        end_ms=end_ms,
+        confidence=confidence,
+    )
+
+
+def test_reconciler_uses_exact_default_window_boundaries():
+    reconciler = TranscriptReconciler()
+    cue = _cue("alpha beta", start_ms=1000, end_ms=2000)
+    aligned_words = [
+        _word("too-early", 0, 499, normalized_text="tooearly"),
+        _word("left-edge", 100, 500, normalized_text="leftedge"),
+        _word("alpha", 600, 900),
+        _word("beta", 1900, 2200),
+        _word("right-edge", 2500, 2600, normalized_text="rightedge"),
+        _word("too-late", 2501, 2600, normalized_text="toolate"),
+    ]
+
+    candidates = reconciler._candidate_words_for_cue(cue, aligned_words)
+
+    assert [word.text for word in candidates] == [
+        "left-edge",
+        "alpha",
+        "beta",
+        "right-edge",
+    ]
+
+
+def test_reconciler_default_thresholds_allow_partial_fuzzy_match_without_fallback():
+    reconciler = TranscriptReconciler()
+    cue = _cue("alpha beta gamma", end_ms=900)
+    aligned_words = [
+        _word("alpha", 100, 200),
+        _word("betaa", 250, 400),
+        _word("noise", 500, 650),
+    ]
+
+    reconciled_cues, quality = run_reconcile_with_watchdog(reconciler, [cue], aligned_words)
+
+    assert reconciled_cues[0].timing_mode == "reconciled_asr"
+    assert [word.match_method for word in reconciled_cues[0].words] == [
+        "exact_normalized",
+        "fuzzy_normalized",
+        "interpolated",
+    ]
+    assert quality["matched_word_ratio"] == 2 / 3
+    assert quality["fallback_cue_ratio"] == 0.0
+
+
+def test_reconciler_counts_each_approximate_cue_and_preserves_generated_words():
+    reconciler = TranscriptReconciler()
+    cues = [
+        _cue("one two", cue_id="cue-1", speaker="Speaker 1", start_ms=0, end_ms=400),
+        _cue("three four", cue_id="cue-2", speaker="Speaker 2", start_ms=500, end_ms=900),
+    ]
+
+    reconciled_cues, quality = run_reconcile_with_watchdog(reconciler, cues, aligned_words=[])
+
+    assert [cue.timing_mode for cue in reconciled_cues] == ["approximate", "approximate"]
+    assert [cue.cue_id for cue in reconciled_cues] == ["cue-1", "cue-2"]
+    assert [cue.speaker for cue in reconciled_cues] == ["Speaker 1", "Speaker 2"]
+    assert [len(cue.words) for cue in reconciled_cues] == [2, 2]
+    assert all(word.fallback_used for cue in reconciled_cues for word in cue.words)
+    assert all(word.source == "approximate" for cue in reconciled_cues for word in cue.words)
+    assert quality == {
+        "global_score": 0.0,
+        "matched_word_ratio": 0.0,
+        "exact_match_ratio": 0.0,
+        "fallback_cue_ratio": 1.0,
+    }
+
+
+def test_reconciler_empty_cue_fallback_keeps_identity_and_zero_quality():
+    reconciler = TranscriptReconciler()
+    cue = _cue("", cue_id="empty", speaker="Narrator", start_ms=120, end_ms=180)
+
+    reconciled_cues, quality = run_reconcile_with_watchdog(reconciler, [cue], aligned_words=[])
+
+    reconciled_cue = reconciled_cues[0]
+    assert reconciled_cue.cue_id == "empty"
+    assert reconciled_cue.speaker == "Narrator"
+    assert reconciled_cue.original_text == ""
+    assert reconciled_cue.start_ms == 120
+    assert reconciled_cue.end_ms == 180
+    assert reconciled_cue.timing_mode == "approximate"
+    assert reconciled_cue.quality_score == 0.0
+    assert reconciled_cue.words == ()
+    assert quality == {
+        "global_score": 0.0,
+        "matched_word_ratio": 0.0,
+        "exact_match_ratio": 0.0,
+        "fallback_cue_ratio": 1.0,
+    }
+
+
+def test_reconciler_uses_next_matching_occurrence_for_repeated_tokens():
+    reconciler = TranscriptReconciler()
+    cue = _cue("alpha alpha", end_ms=800)
+    aligned_words = [
+        _word("alpha", 100, 180),
+        _word("alpha", 300, 360),
+        _word("alpha", 700, 760),
+    ]
+
+    reconciled_cues, _ = run_reconcile_with_watchdog(reconciler, [cue], aligned_words)
+
+    assert [(word.start_ms, word.end_ms) for word in reconciled_cues[0].words] == [
+        (100, 180),
+        (300, 360),
+    ]
+
+
+def test_reconciler_interpolates_consecutive_gap_with_integer_segments():
+    reconciler = TranscriptReconciler(minimum_match_ratio=0.4)
+    cue = _cue("start mid-a mid-b mid-c end", end_ms=600)
+    aligned_words = [
+        _word("start", 100, 200),
+        _word("end", 205, 260),
+    ]
+
+    reconciled_cues, _ = run_reconcile_with_watchdog(reconciler, [cue], aligned_words)
+    words = reconciled_cues[0].words
+
+    assert [(word.display_text, word.start_ms, word.end_ms, word.fallback_used) for word in words] == [
+        ("start", 100, 200, False),
+        ("mid-a", 200, 201, False),
+        ("mid-b", 201, 202, False),
+        ("mid-c", 202, 205, False),
+        ("end", 205, 260, False),
+    ]
+    assert [word.source for word in words] == [
+        "reconciled",
+        "interpolated",
+        "interpolated",
+        "interpolated",
+        "reconciled",
+    ]

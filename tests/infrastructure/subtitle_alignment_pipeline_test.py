@@ -1,6 +1,7 @@
 from src.domain.value_objects import TimeInterval
 from src.infrastructure.subtitle_processor import SubtitleProcessor
 from tests.infrastructure.alignment_support_test import build_fake_alignment_payload
+from tests.infrastructure.reconciler_support_test import watchdog
 
 
 def test_process_subtitles_uses_two_level_cache_for_alignment(tmp_path, monkeypatch):
@@ -36,7 +37,8 @@ def test_process_subtitles_uses_two_level_cache_for_alignment(tmp_path, monkeypa
 
     def capture_reconcile(cues, aligned_words):
         reconcile_calls["count"] += 1
-        return original_reconcile(cues, aligned_words)
+        with watchdog():
+            return original_reconcile(cues, aligned_words)
 
     monkeypatch.setattr(processor.reconciler, "reconcile", capture_reconcile)
 

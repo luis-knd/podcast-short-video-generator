@@ -139,3 +139,50 @@ def test_generate_short_use_case_with_outro_options():
     call_args = mock_processor.generate_short.call_args_list[0].kwargs
     assert call_args["outro_filepath"] == "inputs/outroShort.mp4"
     assert call_args["fade_duration"] == 1.2
+
+
+def test_generate_short_use_case_video_receives_subtitles_filepath():
+    mock_processor = Mock(spec=IVideoProcessor)
+    use_case = GenerateShortUseCase(video_processor=mock_processor)
+
+    def _make_short(video, interval, target_format, output_filepath, outro_filepath=None, fade_duration=0.7):
+        return ShortVideo(filepath=output_filepath, original_video=video, interval=interval, format=target_format)
+
+    mock_processor.generate_short.side_effect = _make_short
+
+    use_case.execute("clip.mp4", "clip.srt", [{"time": "00:05 - 00:15"}], "out")
+
+    video_arg = mock_processor.generate_short.call_args.kwargs["video"]
+    assert video_arg.subtitles_filepath == "clip.srt"
+    assert video_arg.filepath == "clip.mp4"
+
+
+def test_generate_short_use_case_appends_actual_short_not_none():
+    mock_processor = Mock(spec=IVideoProcessor)
+    use_case = GenerateShortUseCase(video_processor=mock_processor)
+
+    def _make_short(video, interval, target_format, output_filepath, outro_filepath=None, fade_duration=0.7):
+        return ShortVideo(filepath=output_filepath, original_video=video, interval=interval, format=target_format)
+
+    mock_processor.generate_short.side_effect = _make_short
+
+    shorts = use_case.execute("v.mp4", "s.srt", [{"time": "00:05 - 00:15"}, {"time": "00:20 - 00:30"}], "results")
+
+    assert all(short is not None for short in shorts)
+    assert shorts[0].filepath == "results/short_0.mp4"
+    assert shorts[1].filepath == "results/short_1.mp4"
+
+
+def test_generate_short_use_case_default_fade_duration_is_zero_point_seven():
+    mock_processor = Mock(spec=IVideoProcessor)
+    use_case = GenerateShortUseCase(video_processor=mock_processor)
+
+    def _make_short(video, interval, target_format, output_filepath, outro_filepath=None, fade_duration=0.7):
+        return ShortVideo(filepath=output_filepath, original_video=video, interval=interval, format=target_format)
+
+    mock_processor.generate_short.side_effect = _make_short
+
+    use_case.execute("v.mp4", "s.srt", [{"time": "00:01 - 00:10"}], "out")
+
+    fade = mock_processor.generate_short.call_args.kwargs["fade_duration"]
+    assert fade == 0.7

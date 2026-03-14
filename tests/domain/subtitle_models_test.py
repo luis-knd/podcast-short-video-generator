@@ -2,7 +2,15 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from src.domain.subtitle_models import AlignedWord, ReconciledCue, ReconciledWord, SubtitleCue
+from src.domain.subtitle_models import (
+    AlignedWord,
+    ProjectedCue,
+    ProjectedWord,
+    ReconciledCue,
+    ReconciledWord,
+    SubtitleCue,
+    SubtitleTimeline,
+)
 
 
 def test_subtitle_model_dict_roundtrip_preserves_values():
@@ -106,3 +114,35 @@ def test_subtitle_models_are_frozen_and_apply_default_dict_values():
     assert default_reconciled_cue.source_cue_end_ms == 0
     assert default_reconciled_cue.timing_mode == "approximate"
     assert default_reconciled_cue.quality_score == 0.0
+
+
+def test_projected_models_and_timeline_expose_expected_fields():
+    word = ProjectedWord(
+        text="Hello",
+        start_ms=0,
+        end_ms=100,
+        confidence=0.7,
+        source="reconciled",
+        match_method="exact_normalized",
+    )
+    cue = ProjectedCue(
+        cue_id="cue-1",
+        speaker="Speaker 1",
+        original_text="Hello",
+        start_ms=0,
+        end_ms=100,
+        timing_mode="reconciled_asr",
+        quality_score=0.8,
+        words=(word,),
+    )
+    timeline = SubtitleTimeline(
+        interval_start_ms=0,
+        interval_end_ms=1000,
+        cues=(cue,),
+        segments=({"phrase_text": "Hello"},),
+        quality_score=0.8,
+    )
+
+    assert word.to_dict()["start"] == 0
+    assert cue.duration_ms == 100
+    assert timeline.duration_ms == 1000

@@ -4,6 +4,8 @@ from src.domain.value_objects import TimeInterval, VideoFormat
 
 
 class GenerateShortUseCase:
+    DEFAULT_FADE_DURATION = 0.7
+
     def __init__(self, video_processor: IVideoProcessor):
         self.video_processor = video_processor
 
@@ -14,7 +16,7 @@ class GenerateShortUseCase:
         intervals_json: list[dict[str, str]],
         output_dir: str,
         outro_filepath: str | None = None,
-        fade_duration: float = 0.7,
+        fade_duration: float | None = None,
     ) -> list[ShortVideo]:
         """
         Orchestrates the creation of shorts from a single video and multiple intervals.
@@ -22,6 +24,7 @@ class GenerateShortUseCase:
         """
         video = Video(filepath=video_filepath, subtitles_filepath=subtitles_filepath)
         target_format = VideoFormat.youtube_shorts()
+        effective_fade_duration = self.DEFAULT_FADE_DURATION if fade_duration is None else fade_duration
 
         generated_shorts = []
 
@@ -39,7 +42,7 @@ class GenerateShortUseCase:
                 target_format=target_format,
                 output_filepath=output_filepath,
                 outro_filepath=outro_filepath,
-                fade_duration=fade_duration,
+                fade_duration=effective_fade_duration,
             )
             generated_shorts.append(short)
 

@@ -38,13 +38,22 @@ flowchart TB
 
     subgraph APP["Application"]
         UC["GenerateShortUseCase"]:::app
+        BPLAN["BuildShortEditingPlanUseCase"]:::app
+        BEATS["ImpactBeatDetector"]:::app
+        ORES["ManualBrollOverrideResolver"]:::app
+        QGEN["BrollQueryGenerator"]:::app
+        RANK["BrollCandidateRanker"]:::app
+        IPLAN["BrollInsertionPlanner"]:::app
     end
 
     subgraph DOMAIN["Domain"]
         PORT["IVideoProcessor"]:::domain
+        BPORT["IBrollAssetProvider /<br/>IBrollArtifactsWriter"]:::domain
         ENT["Video / ShortVideo"]:::domain
         VO["TimeInterval / VideoFormat"]:::domain
         MODELS["SubtitleCue / AlignedWord /<br/>ReconciledCue"]:::domain
+        BMODELS["ImpactBeat / BrollCandidate /<br/>ShortEditingPlan"]:::domain
+        OMODEL["ManualBrollOverride"]:::domain
     end
 
     subgraph INFRA["Infrastructure"]
@@ -58,11 +67,19 @@ flowchart TB
         PROJ["IntervalSubtitleProjector"]:::infra
         ASS["AssWriter"]:::infra
         CFG["ConfigManager"]:::infra
+        PLANW["BrollPlanJsonWriter"]:::infra
+        OLOAD["ManualBrollOverrideLoader"]:::infra
+        LCACHE["BrollAssetCache"]:::infra
+        LOCAL["LocalMediaProvider"]:::infra
+        PEX["PexelsBrollProvider"]:::infra
+        PIX["PixabayBrollProvider"]:::infra
     end
 
     MEDIA[("Source video/audio")]:::artifact
     CACHEFS[("outputs/.cache/<br/>subtitle_alignment")]:::artifact
+    BROLLCACHE[("outputs/.cache/<br/>broll/assets")]:::artifact
     ASSFILE[("short_N.ass")]:::artifact
+    AUDIT[("impact_beats / candidates /<br/>plan JSON")]:::artifact
 
     CLI e1@--> UC
     UC e2@--> PORT
@@ -73,6 +90,8 @@ flowchart TB
     FFMPEG e6@--> SUB
     FFMPEG e7@--> ENT
     FFMPEG e8@--> VO
+    FFMPEG e25@--> BPLAN
+    FFMPEG e26@--> PLANW
 
     SUB e9@--> PARSER
     SUB e10@--> ALIGN
@@ -91,6 +110,26 @@ flowchart TB
     CACHE e22@--> CACHEFS
     ASS e23@--> ASSFILE
     ASS e24@--> CFG
+    BPLAN e27@--> BEATS
+    BPLAN e28@--> ORES
+    BPLAN e29@--> QGEN
+    BPLAN e30@--> RANK
+    BPLAN e31@--> IPLAN
+    BPLAN e32@--> BPORT
+    BPLAN e33@--> BMODELS
+    ORES e34@--> OMODEL
+    OLOAD e35@--> OMODEL
+    FFMPEG e36@--> OLOAD
+    PLANW e37@--> AUDIT
+    LOCAL e38@-.-> BPORT
+    PEX e39@-.-> BPORT
+    PIX e40@-.-> BPORT
+    PEX e41@--> LCACHE
+    PIX e42@--> LCACHE
+    LCACHE e43@--> BROLLCACHE
+    LOCAL e44@--> BMODELS
+    PEX e45@--> BMODELS
+    PIX e46@--> BMODELS
 
     e1@{ animate: true }
     e2@{ animate: true }
@@ -116,6 +155,28 @@ flowchart TB
     e22@{ animate: true }
     e23@{ animate: true }
     e24@{ animate: true }
+    e25@{ animate: true }
+    e26@{ animate: true }
+    e27@{ animate: true }
+    e28@{ animate: true }
+    e29@{ animate: true }
+    e30@{ animate: true }
+    e31@{ animate: true }
+    e32@{ animate: true }
+    e33@{ animate: true }
+    e34@{ animate: true }
+    e35@{ animate: true }
+    e36@{ animate: true }
+    e37@{ animate: true }
+    e38@{ animate: true }
+    e39@{ animate: true }
+    e40@{ animate: true }
+    e41@{ animate: true }
+    e42@{ animate: true }
+    e43@{ animate: true }
+    e44@{ animate: true }
+    e45@{ animate: true }
+    e46@{ animate: true }
 
     classDef delivery fill:#ffd7c2,stroke:#b45622,color:#24150c
     classDef app fill:#d9e9ff,stroke:#355e9b,color:#142033

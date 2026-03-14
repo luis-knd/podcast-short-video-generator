@@ -12,6 +12,17 @@
     "#26f4ff",
     "#ffe81f"
   ],
+  "broll": {
+    "beat_score_threshold": 0.68,
+    "cutaway_score_threshold": 0.82,
+    "enabled": true,
+    "local_search_dirs": [
+      "inputs/broll/library"
+    ],
+    "min_gap_ms": 4500,
+    "overlay_top_y": 120,
+    "overrides_filepath": "inputs/broll-overrides.json"
+  },
   "subtitles": {
     "active_border_color_hex": "#000000",
     "base_border_color_hex": "#000000",

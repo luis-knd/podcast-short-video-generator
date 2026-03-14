@@ -1,9 +1,3 @@
-import re
-import unicodedata
+from src.domain.text_utils import normalize_token
 
-
-def normalize_token(text: str) -> str:
-    normalized = unicodedata.normalize("NFKC", text).strip().lower()
-    normalized = normalized.strip(".,!?;:\"'()[]{}")
-    normalized = re.sub(r"\s+", " ", normalized)
-    return normalized
+__all__ = ["normalize_token"]

@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "overrides": [
+    {
+      "short_id": "short_2",
+      "anchor_text": "job interview",
+      "asset_path": "broll/library/business/formal-handshake-office-meeting.mp4",
+      "mode": "full_frame_cutaway",
+      "start_ms": 460,
+      "end_ms": 1800,
+      "mute_asset_audio": true,
+      "priority": 250
+    },
+    {
+      "short_id": "short_2",
+      "anchor_text": "grave",
+      "asset_path": "broll/library/grief/man-standing-grave-cemetery.mp4",
+      "mode": "full_frame_cutaway",
+      "start_ms": 9280,
+      "end_ms": 12400,
+      "mute_asset_audio": true,
+      "priority": 240
+    }
+  ]
+}

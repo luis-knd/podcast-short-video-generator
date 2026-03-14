@@ -4,8 +4,11 @@ from typing import Any
 # isort: off
 from src.domain.subtitle_models import (
     AlignedWord,
+    ProjectedCue,
+    ProjectedWord,
     ReconciledCue,
     ReconciledWord,
+    SubtitleTimeline,
 )
 from src.domain.value_objects import TimeInterval
 from src.infrastructure.config import ConfigManager
@@ -64,6 +67,22 @@ class SubtitleProcessor:
         output_ass_filepath: str,
         media_filepath: str | None = None,
     ) -> list[dict[str, Any]]:
+        timeline = self.build_timeline(
+            srt_filepath=srt_filepath,
+            interval=interval,
+            output_ass_filepath=output_ass_filepath,
+            media_filepath=media_filepath,
+        )
+        self.write_ass_from_timeline(timeline, output_ass_filepath)
+        return list(timeline.segments)
+
+    def build_timeline(
+        self,
+        srt_filepath: str,
+        interval: TimeInterval,
+        output_ass_filepath: str,
+        media_filepath: str | None = None,
+    ) -> SubtitleTimeline:
         cues = self.subtitle_parser.parse(srt_filepath)
         timed_cues = self._resolve_timed_cues(
             cues=cues,
@@ -72,9 +91,19 @@ class SubtitleProcessor:
             output_ass_filepath=output_ass_filepath,
             media_filepath=media_filepath,
         )
-        segments = self.projector.project(timed_cues, interval, words_per_phrase=6)
-        self._write_ass_file(segments, output_ass_filepath)
-        return segments
+        projected_cues = self._project_cues_to_interval(timed_cues, interval)
+        segments = tuple(self.projector.project(timed_cues, interval, words_per_phrase=6))
+        quality_score = self._compute_timeline_quality(projected_cues)
+        return SubtitleTimeline(
+            interval_start_ms=int(interval.start_seconds * 1000),
+            interval_end_ms=int(interval.end_seconds * 1000),
+            cues=tuple(projected_cues),
+            segments=segments,
+            quality_score=quality_score,
+        )
+
+    def write_ass_from_timeline(self, timeline: SubtitleTimeline, output_ass_filepath: str):
+        self._write_ass_file(list(timeline.segments), output_ass_filepath)
 
     def _resolve_timed_cues(
         self,
@@ -221,4 +250,62 @@ class SubtitleProcessor:
             output_filepath,
             format_time=self._format_ms_to_ass_time,
             get_text_width=self._get_text_width,
+        )
+
+    @staticmethod
+    def _project_cues_to_interval(cues: list[ReconciledCue], interval: TimeInterval) -> list[ProjectedCue]:
+        interval_start_ms = int(interval.start_seconds * 1000)
+        interval_end_ms = int(interval.end_seconds * 1000)
+        interval_duration_ms = interval_end_ms - interval_start_ms
+        projected_cues: list[ProjectedCue] = []
+
+        for cue in cues:
+            if cue.end_ms <= interval_start_ms or cue.start_ms >= interval_end_ms:
+                continue
+
+            projected_words: list[ProjectedWord] = []
+            for word in cue.words:
+                start_ms = max(0, word.start_ms - interval_start_ms)
+                end_ms = min(interval_duration_ms, word.end_ms - interval_start_ms)
+                if end_ms <= 0 or start_ms >= interval_duration_ms or end_ms <= start_ms:
+                    continue
+
+                projected_words.append(
+                    ProjectedWord(
+                        text=word.display_text,
+                        start_ms=start_ms,
+                        end_ms=end_ms,
+                        confidence=word.confidence,
+                        source=word.source,
+                        match_method=word.match_method,
+                        fallback_used=word.fallback_used,
+                    )
+                )
+
+            if not projected_words:
+                continue
+
+            projected_cues.append(
+                ProjectedCue(
+                    cue_id=cue.cue_id,
+                    speaker=cue.speaker,
+                    original_text=cue.original_text,
+                    start_ms=projected_words[0].start_ms,
+                    end_ms=projected_words[-1].end_ms,
+                    timing_mode=cue.timing_mode,
+                    quality_score=cue.quality_score,
+                    words=tuple(projected_words),
+                )
+            )
+
+        return projected_cues
+
+    @staticmethod
+    def _compute_timeline_quality(projected_cues: list[ProjectedCue]) -> float:
+        if not projected_cues:
+            return 0.0
+
+        return round(
+            sum(cue.quality_score for cue in projected_cues) / len(projected_cues),
+            4,
         )

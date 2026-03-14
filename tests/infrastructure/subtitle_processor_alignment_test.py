@@ -3,6 +3,7 @@ from src.domain.value_objects import TimeInterval
 from src.infrastructure.subtitle_processor import SubtitleProcessor
 from src.infrastructure.subtitles.faster_whisper_aligner import FasterWhisperWordAligner
 from tests.infrastructure.alignment_support_test import build_fake_alignment_payload
+from tests.infrastructure.reconciler_support_test import watchdog
 
 
 def _make_cue(
@@ -215,13 +216,14 @@ def test_subtitle_processor_builds_reconciled_payload_with_expected_keys(tmp_pat
         lambda output_ass_filepath: fake_cache,
     )
 
-    timed_cues = processor._resolve_timed_cues(
-        [cue],
-        interval,
-        "input.srt",
-        str(tmp_path / "output.ass"),
-        "input.mp4",
-    )
+    with watchdog():
+        timed_cues = processor._resolve_timed_cues(
+            [cue],
+            interval,
+            "input.srt",
+            str(tmp_path / "output.ass"),
+            "input.mp4",
+        )
 
     assert fake_cache.raw_kwargs == {
         "media_filepath": "input.mp4",

@@ -1,5 +1,6 @@
 import importlib
 import json
+import os
 from unittest.mock import mock_open, patch
 
 import pytest
@@ -89,6 +90,36 @@ def test_get_alignment_setting():
         c.config = {"alignment": {"enabled": False}}
         assert c.get_alignment_setting("enabled", True) is False
         assert c.get_alignment_setting("backend", "faster_whisper") == "faster_whisper"
+
+
+def test_get_broll_setting():
+    with patch("os.path.exists", return_value=False):
+        c = ConfigManager()
+        c.config = {"broll": {"enabled": True, "min_gap_ms": 4200}}
+        assert c.get_broll_setting("enabled", False) is True
+        assert c.get_broll_setting("min_gap_ms", 4500) == 4200
+        assert c.get_broll_setting("missing", "fallback") == "fallback"
+
+
+def test_load_env_file_sets_missing_variables_without_overwriting_existing_ones(monkeypatch):
+    monkeypatch.setenv("PEXELS_API_KEY", "already-set")
+    monkeypatch.delenv("PIXABAY_API_KEY", raising=False)
+
+    env_content = """
+    # Comment line
+    PEXELS_API_KEY=from-env-file
+    PIXABAY_API_KEY="pixabay-from-env-file"
+    INVALID_LINE
+    """.strip()
+
+    with (
+        patch("os.path.exists", return_value=True),
+        patch("builtins.open", mock_open(read_data=env_content)),
+    ):
+        ConfigManager._load_env_file()
+
+    assert os.getenv("PEXELS_API_KEY") == "already-set"
+    assert os.getenv("PIXABAY_API_KEY") == "pixabay-from-env-file"
 
 
 def test_hex_to_ass_color():
