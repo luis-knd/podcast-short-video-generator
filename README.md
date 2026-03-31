@@ -367,22 +367,22 @@ Ejemplo:
     {
       "short_id": "short_2",
       "anchor_text": "job interview",
-      "asset_path": "../ejemploBroll1.mp4",
+      "asset_path": "broll/library/business/formal-handshake-office-meeting.mp4",
       "mode": "full_frame_cutaway",
       "start_ms": 460,
       "end_ms": 1800,
       "mute_asset_audio": true,
-      "priority": 200
+      "priority": 250
     },
     {
       "short_id": "short_2",
       "anchor_text": "grave",
-      "asset_path": "../ejemploBroll.mp4",
+      "asset_path": "broll/library/grief/man-standing-grave-cemetery.mp4",
       "mode": "full_frame_cutaway",
       "start_ms": 9280,
       "end_ms": 12400,
       "mute_asset_audio": true,
-      "priority": 200
+      "priority": 240
     }
   ]
 }
@@ -426,15 +426,20 @@ Estos archivos permiten revisar:
 Por defecto, **(`inputs/recortes.json`)**
 
 Para definir múltiples segmentos del video original que se van a convertir en "Shorts", el archivo JSON debe contener un
-arreglo de objetos. Cada objeto debe tener la clave `"time"` con formato `"MM:SS - MM:SS"`.
+arreglo de objetos. Cada objeto debe tener la clave `"time"` con uno de estos formatos soportados:
+
+- `"MM:SS - MM:SS"`
+- `"HH:MM:SS - HH:MM:SS"`
+- `"HH:MM:SS,mmm - HH:MM:SS,mmm"` para reutilizar timestamps SRT con milisegundos
+- `"<segundos> - <segundos>"` para valores expresados directamente en segundos
 
 Cada objeto en este array resultará en la creación de un Short independiente en la carpeta de salida.
 
 ```json
 [
   { "time": "00:10 - 00:20" },
-  { "time": "05:30 - 06:15" },
-  { "time": "12:00 - 13:00" }
+  { "time": "00:05:30 - 00:06:15" },
+  { "time": "00:07:50,000 - 00:08:39,000" }
 ]
 ```
 

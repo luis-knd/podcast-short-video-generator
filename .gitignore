@@ -106,5 +106,6 @@ test_intervals.json
 parse_srt_test.py
 dump_mutants.sh
 print_baseline.py
+AGENTS.md
 docs/plans/
 docs/prds/
