@@ -26,7 +26,7 @@ def test_reconciler_init_default_parameter_values_are_exact():
     sig = inspect.signature(TranscriptReconciler.__init__)
     params = sig.parameters
 
-    assert params["match_window_ms"].default == 500
+    assert params["match_window_ms"].default == 1000
     assert params["minimum_match_ratio"].default == 0.6
     assert params["fuzzy_threshold"].default == 0.86
 

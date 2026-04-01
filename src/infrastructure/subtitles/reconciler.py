@@ -6,11 +6,11 @@ from src.infrastructure.subtitles.approximate_aligner import ApproximateWordAlig
 
 
 class TranscriptReconciler:
-    version = "v1"
+    version = "v2"
 
     def __init__(
         self,
-        match_window_ms: int = 500,
+        match_window_ms: int = 1000,
         minimum_match_ratio: float = 0.6,
         fuzzy_threshold: float = 0.86,
     ):
@@ -159,16 +159,20 @@ class TranscriptReconciler:
                 word_index += 1
                 continue
 
-            prev_word = self._previous_resolved_word(reconciled_words, word_index)
-            next_word = self._next_resolved_word(reconciled_words, word_index)
-            span_start, span_end = self._interpolation_span(cue, prev_word, next_word)
-
             run_start = word_index
             run_end = word_index
             while run_end + 1 < len(reconciled_words) and reconciled_words[run_end + 1] is None:
                 run_end += 1
 
             run_length = run_end - run_start + 1
+            prev_word = self._previous_resolved_word(reconciled_words, word_index)
+            next_word = self._next_resolved_word(reconciled_words, word_index)
+            span_start, span_end = self._interpolation_span(
+                cue,
+                prev_word,
+                next_word,
+                run_length=run_length,
+            )
             segment_duration = max(span_end - span_start, run_length)
             time_per_word = max(segment_duration // run_length, 1)
 
@@ -216,11 +220,20 @@ class TranscriptReconciler:
         cue: SubtitleCue,
         previous_word: ReconciledWord | None,
         next_word: ReconciledWord | None,
+        run_length: int = 1,
     ) -> tuple[int, int]:
-        span_start = cue.start_ms if previous_word is None else previous_word.end_ms
-        span_end = cue.end_ms if next_word is None else next_word.start_ms
+        if previous_word is None:
+            if next_word is None:
+                span_start = cue.start_ms
+                span_end = cue.end_ms
+            else:
+                span_end = next_word.start_ms
+                span_start = cue.start_ms if cue.start_ms < span_end else max(0, span_end - run_length)
+        else:
+            span_start = previous_word.end_ms
+            span_end = cue.end_ms if next_word is None else next_word.start_ms
         if span_end <= span_start:
-            span_end = span_start + 1
+            span_end = span_start + run_length
         return span_start, span_end
 
     def _approximate_cue(self, cue: SubtitleCue) -> ReconciledCue:
