@@ -17,7 +17,13 @@ class TimeInterval:
     @classmethod
     def from_string(cls, time_str: str) -> "TimeInterval":
         """
-        Parses a string in the format "MM:SS - MM:SS" into a TimeInterval.
+        Parses a string into a TimeInterval.
+
+        Supported formats:
+          - "MM:SS - MM:SS"              e.g. "04:48 - 05:19"
+          - "HH:MM:SS - HH:MM:SS"       e.g. "01:04:48 - 01:05:19"
+          - "HH:MM:SS,mmm - HH:MM:SS,mmm"  e.g. "00:04:48,460 - 00:05:19,000" (SRT)
+          - "<seconds> - <seconds>"      e.g. "10.5 - 20"
         """
         try:
             if " - " not in time_str:
@@ -34,7 +40,8 @@ class TimeInterval:
 
     @staticmethod
     def _parse_time(time_str: str) -> float:
-        parts = time_str.split(":")
+        normalized = time_str.replace(",", ".")
+        parts = normalized.split(":")
         if len(parts) == 2:
             minutes, seconds = parts
             return int(minutes) * 60 + float(seconds)
@@ -42,7 +49,7 @@ class TimeInterval:
             hours, minutes, seconds = parts
             return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
         else:
-            return float(time_str)
+            return float(normalized)
 
 
 @dataclass(frozen=True)

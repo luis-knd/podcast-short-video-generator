@@ -13,21 +13,30 @@ def test_time_interval_valid_creation():
     assert interval.end_seconds == 20.0
 
 
-def test_time_interval_staticmethod_parse_time():
-    # Calling on instance to ensure it is bounded as staticmethod
-    # Otherwise, it passes `self` to time_str resulting in error
-    interval = TimeInterval(start_seconds=10.0, end_seconds=20.0)
-    assert interval._parse_time("01:30") == 90.0
+@pytest.mark.parametrize(
+    ("start_seconds", "end_seconds"),
+    [
+        (10.5, 20.0),
+        (0.0, 10.0),
+        (0.5, 10.0),
+    ],
+)
+def test_time_interval_accepts_valid_boundaries(start_seconds, end_seconds):
+    interval = TimeInterval(start_seconds=start_seconds, end_seconds=end_seconds)
+    assert interval.start_seconds == start_seconds
+    assert interval.end_seconds == end_seconds
 
 
-def test_time_interval_zero_start():
-    interval = TimeInterval(start_seconds=0.0, end_seconds=10.0)
-    assert interval.start_seconds == 0.0
-
-
-def test_time_interval_fractional_start():
-    interval = TimeInterval(start_seconds=0.5, end_seconds=10.0)
-    assert interval.start_seconds == 0.5
+@pytest.mark.parametrize(
+    ("time_str", "expected_seconds"),
+    [
+        ("01:30", 90.0),
+        ("00:00:12,460", pytest.approx(12.460)),
+        ("01:06:36,500", pytest.approx(3996.500)),
+    ],
+)
+def test_time_interval_parse_time_supports_expected_formats(time_str, expected_seconds):
+    assert TimeInterval._parse_time(time_str) == expected_seconds
 
 
 def test_time_interval_negative_start():
@@ -35,14 +44,10 @@ def test_time_interval_negative_start():
         TimeInterval(start_seconds=-1, end_seconds=10)
 
 
-def test_time_interval_end_before_start():
+@pytest.mark.parametrize("end_seconds", [5, 10])
+def test_time_interval_rejects_non_increasing_end(end_seconds):
     with pytest.raises(DomainError, match="^End time must be greater than start time$"):
-        TimeInterval(start_seconds=10, end_seconds=5)
-
-
-def test_time_interval_end_equal_to_start():
-    with pytest.raises(DomainError, match="^End time must be greater than start time$"):
-        TimeInterval(start_seconds=10, end_seconds=10)
+        TimeInterval(start_seconds=10, end_seconds=end_seconds)
 
 
 def test_time_interval_is_frozen():
@@ -51,22 +56,21 @@ def test_time_interval_is_frozen():
         interval.start_seconds = 15.0
 
 
-def test_time_interval_from_string_mm_ss():
-    interval = TimeInterval.from_string("01:30 - 02:45")
-    assert interval.start_seconds == 90.0
-    assert interval.end_seconds == 165.0
-
-
-def test_time_interval_from_string_hh_mm_ss():
-    interval = TimeInterval.from_string("01:01:30 - 01:02:45")
-    assert interval.start_seconds == 3690.0
-    assert interval.end_seconds == 3765.0
-
-
-def test_time_interval_from_string_seconds():
-    interval = TimeInterval.from_string("10.5 - 20")
-    assert interval.start_seconds == 10.5
-    assert interval.end_seconds == 20.0
+@pytest.mark.parametrize(
+    ("time_str", "start_seconds", "end_seconds"),
+    [
+        ("01:30 - 02:45", 90.0, 165.0),
+        ("01:01:30 - 01:02:45", 3690.0, 3765.0),
+        ("00:00:12,460 - 00:00:31,460", pytest.approx(12.460), pytest.approx(31.460)),
+        ("00:06:36,460 - 00:07:24,460", pytest.approx(396.460), pytest.approx(444.460)),
+        ("00:07:50,000 - 00:08:39,000", pytest.approx(470.0), pytest.approx(519.0)),
+        ("10.5 - 20", 10.5, 20.0),
+    ],
+)
+def test_time_interval_from_string_supports_expected_formats(time_str, start_seconds, end_seconds):
+    interval = TimeInterval.from_string(time_str)
+    assert interval.start_seconds == start_seconds
+    assert interval.end_seconds == end_seconds
 
 
 def test_time_interval_from_string_invalid_format():

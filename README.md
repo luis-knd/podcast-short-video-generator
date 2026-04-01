@@ -367,22 +367,22 @@ Ejemplo:
     {
       "short_id": "short_2",
       "anchor_text": "job interview",
-      "asset_path": "../ejemploBroll1.mp4",
+      "asset_path": "broll/library/business/formal-handshake-office-meeting.mp4",
       "mode": "full_frame_cutaway",
       "start_ms": 460,
       "end_ms": 1800,
       "mute_asset_audio": true,
-      "priority": 200
+      "priority": 250
     },
     {
       "short_id": "short_2",
       "anchor_text": "grave",
-      "asset_path": "../ejemploBroll.mp4",
+      "asset_path": "broll/library/grief/man-standing-grave-cemetery.mp4",
       "mode": "full_frame_cutaway",
       "start_ms": 9280,
       "end_ms": 12400,
       "mute_asset_audio": true,
-      "priority": 200
+      "priority": 240
     }
   ]
 }
@@ -426,15 +426,20 @@ Estos archivos permiten revisar:
 Por defecto, **(`inputs/recortes.json`)**
 
 Para definir múltiples segmentos del video original que se van a convertir en "Shorts", el archivo JSON debe contener un
-arreglo de objetos. Cada objeto debe tener la clave `"time"` con formato `"MM:SS - MM:SS"`.
+arreglo de objetos. Cada objeto debe tener la clave `"time"` con uno de estos formatos soportados:
+
+- `"MM:SS - MM:SS"`
+- `"HH:MM:SS - HH:MM:SS"`
+- `"HH:MM:SS,mmm - HH:MM:SS,mmm"` para reutilizar timestamps SRT con milisegundos
+- `"<segundos> - <segundos>"` para valores expresados directamente en segundos
 
 Cada objeto en este array resultará en la creación de un Short independiente en la carpeta de salida.
 
 ```json
 [
   { "time": "00:10 - 00:20" },
-  { "time": "05:30 - 06:15" },
-  { "time": "12:00 - 13:00" }
+  { "time": "00:05:30 - 00:06:15" },
+  { "time": "00:07:50,000 - 00:08:39,000" }
 ]
 ```
 
@@ -587,7 +592,7 @@ pytest tests/ --cov=src --cov-report=term-missing --cov-branch --cov-fail-under=
 ### Pruebas de Mutación
 
 Para asegurar que nuestros tests no solo cubran el código, sino que sean **efectivos** detectando errores, utilizamos
-**Mutation Testing** con la herramienta `mutmut` `>=3,<4`.
+**Mutation Testing** con la herramienta `mutmut` `==3.5.0`.
 
 A diferencia de la cobertura tradicional, las pruebas de mutación introducen pequeños cambios (mutaciones) en el código
 fuente para verificar si los tests existentes son capaces de detectarlos y fallar. Si un test falla al detectar un
@@ -596,7 +601,7 @@ cambio, el mutante ha sido "asesinado" (lo cual es bueno). Si el test pasa a pes
 
 #### Configuración actual del proyecto
 
-- `requirements.txt` instala `mutmut` `>=3,<4`.
+- `requirements.txt` fija `mutmut` en `3.5.0`.
 - `setup.cfg` define:
   - `paths_to_mutate=src/`
   - `tests_dir=tests/`
@@ -604,11 +609,15 @@ cambio, el mutante ha sido "asesinado" (lo cual es bueno). Si el test pasa a pes
 - `conftest.py` aplica un parche de compatibilidad para el layout `src/` como paquete Python.
 - El workflow `pr-mutation-tests.yml` no muta todo el proyecto en cada PR:
   - detecta solo archivos `.py` modificados dentro de `src/`
-  - reescribe `paths_to_mutate` temporalmente en CI
-  - parchea `mutmut` en runtime para el layout `src/` como paquete
+  - filtra ese conjunto para quedarse solo con archivos que `mutmut` realmente puede mutar
+  - reescribe `paths_to_mutate` temporalmente en CI con ese subconjunto
+  - parchea `mutmut` en runtime para el layout `src/` como paquete usando un script Python idempotente
   - corre `mutmut run`
   - exporta métricas con `mutmut export-cicd-stats`
   - falla el job si el score es menor a `90%`
+- Si un PR toca solo archivos sin mutantes generables, como puede pasar con clases decoradas (`@dataclass`, `@property`,
+  etc.), el workflow salta la ejecución de mutación en vez de fallar con un falso positivo de cobertura.
+- El workflow depende de internals de `mutmut`; si se cambia de versión, hay que revisar primero ese parche de CI.
 
 #### Ejecución local
 
@@ -657,7 +666,7 @@ cambio, el mutante ha sido "asesinado" (lo cual es bueno). Si el test pasa a pes
    mutmut browse --show-killed
    ```
 
-   > No requiere dependencia adicional; `mutmut browse` viene incluido en `mutmut>=3`.
+   > No requiere dependencia adicional; `mutmut browse` viene incluido en `mutmut==3.5.0`.
 
 ### Calidad estática
 
