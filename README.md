@@ -609,11 +609,14 @@ cambio, el mutante ha sido "asesinado" (lo cual es bueno). Si el test pasa a pes
 - `conftest.py` aplica un parche de compatibilidad para el layout `src/` como paquete Python.
 - El workflow `pr-mutation-tests.yml` no muta todo el proyecto en cada PR:
   - detecta solo archivos `.py` modificados dentro de `src/`
-  - reescribe `paths_to_mutate` temporalmente en CI
+  - filtra ese conjunto para quedarse solo con archivos que `mutmut` realmente puede mutar
+  - reescribe `paths_to_mutate` temporalmente en CI con ese subconjunto
   - parchea `mutmut` en runtime para el layout `src/` como paquete usando un script Python idempotente
   - corre `mutmut run`
   - exporta métricas con `mutmut export-cicd-stats`
   - falla el job si el score es menor a `90%`
+- Si un PR toca solo archivos sin mutantes generables, como puede pasar con clases decoradas (`@dataclass`, `@property`,
+  etc.), el workflow salta la ejecución de mutación en vez de fallar con un falso positivo de cobertura.
 - El workflow depende de internals de `mutmut`; si se cambia de versión, hay que revisar primero ese parche de CI.
 
 #### Ejecución local

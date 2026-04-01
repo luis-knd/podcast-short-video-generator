@@ -100,35 +100,66 @@ jobs:
             cat /tmp/changed_src_files.txt
           fi
 
-      - name: Scope mutations to changed files
+      - name: Scope mutations to mutatable changed files
+        id: mutatable
         if: steps.changed.outputs.skip == 'false'
         run: |
           python3 << 'PYEOF'
-          import configparser, pathlib
+          import configparser
+          import os
+          import pathlib
+
+          from mutmut.file_mutation import mutate_file_contents
+
+          github_output = pathlib.Path(os.environ['GITHUB_OUTPUT'])
 
           changed = pathlib.Path('/tmp/changed_src_files.txt').read_text().strip().splitlines()
           changed = [f for f in changed if f]
+          mutatable = []
+          skipped = []
+
+          for file_path in changed:
+              mutant_names = mutate_file_contents(file_path, pathlib.Path(file_path).read_text())[1]
+              if mutant_names:
+                  mutatable.append(file_path)
+                  print(f"MUTATABLE {file_path}: {len(mutant_names)} mutants")
+              else:
+                  skipped.append(file_path)
+                  print(f"SKIP {file_path}: mutmut generated 0 mutants")
+
+          if not mutatable:
+              with open(github_output, 'a') as output:
+                  output.write('skip=true\n')
+              print('No mutatable changed files detected; skipping mutation run.')
+              raise SystemExit(0)
 
           cfg = configparser.ConfigParser()
           cfg.read('setup.cfg')
-          cfg.set('mutmut', 'paths_to_mutate', '\n' + '\n'.join(changed))
+          cfg.set('mutmut', 'paths_to_mutate', '\n' + '\n'.join(mutatable))
 
           with open('setup.cfg', 'w') as f:
               cfg.write(f)
 
           print("Scoped [mutmut] paths_to_mutate:")
-          for p in changed:
+          for p in mutatable:
               print(f"  {p}")
+          if skipped:
+              print("Skipped changed files without generated mutants:")
+              for p in skipped:
+                  print(f"  {p}")
+
+          with open(github_output, 'a') as output:
+              output.write('skip=false\n')
           PYEOF
 
       - name: Run mutation tests
-        if: steps.changed.outputs.skip == 'false'
+        if: steps.changed.outputs.skip == 'false' && steps.mutatable.outputs.skip == 'false'
         env:
           PYTHONDONTWRITEBYTECODE: "1"
         run: mutmut run
 
       - name: Check mutation coverage
-        if: steps.changed.outputs.skip == 'false'
+        if: steps.changed.outputs.skip == 'false' && steps.mutatable.outputs.skip == 'false'
         run: |
           mutmut export-cicd-stats
           python3 << 'PYEOF'
