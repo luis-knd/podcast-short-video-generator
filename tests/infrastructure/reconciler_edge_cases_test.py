@@ -47,10 +47,12 @@ def test_reconciler_uses_exact_default_window_boundaries():
     candidates = reconciler._candidate_words_for_cue(cue, aligned_words)
 
     assert [word.text for word in candidates] == [
+        "too-early",
         "left-edge",
         "alpha",
         "beta",
         "right-edge",
+        "too-late",
     ]
 
 
@@ -163,3 +165,43 @@ def test_reconciler_interpolates_consecutive_gap_with_integer_segments():
         "interpolated",
         "reconciled",
     ]
+
+
+def test_reconciler_matches_leading_word_when_srt_cue_starts_late():
+    reconciler = TranscriptReconciler()
+    cue = _cue("we scream now", start_ms=1000, end_ms=1600)
+    aligned_words = [
+        _word("we", 200, 400),
+        _word("scream", 600, 800),
+        _word("now", 900, 1100),
+    ]
+
+    reconciled_cues, _ = run_reconcile_with_watchdog(reconciler, [cue], aligned_words)
+    words = reconciled_cues[0].words
+
+    assert reconciled_cues[0].timing_mode == "reconciled_asr"
+    assert [word.display_text for word in words] == ["we", "scream", "now"]
+    assert [word.source for word in words] == ["reconciled", "reconciled", "reconciled"]
+    assert [(word.start_ms, word.end_ms) for word in words] == [
+        (200, 400),
+        (600, 800),
+        (900, 1100),
+    ]
+
+
+def test_reconciler_places_unmatched_leading_word_before_next_resolved_word():
+    reconciler = TranscriptReconciler()
+    cue = _cue("alpha beta gamma", start_ms=1000, end_ms=1600)
+    aligned_words = [
+        _word("beta", 600, 800),
+        _word("gamma", 900, 1100),
+    ]
+
+    reconciled_cues, _ = run_reconcile_with_watchdog(reconciler, [cue], aligned_words)
+    words = reconciled_cues[0].words
+
+    assert reconciled_cues[0].timing_mode == "reconciled_asr"
+    assert [word.display_text for word in words] == ["alpha", "beta", "gamma"]
+    assert words[0].source == "interpolated"
+    assert words[0].end_ms <= words[1].start_ms
+    assert [word.start_ms for word in words] == sorted(word.start_ms for word in words)

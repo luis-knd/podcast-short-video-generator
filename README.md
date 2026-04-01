@@ -91,6 +91,8 @@ el sistema operativo.
 El pipeline de subtítulos intenta alinear palabras sobre él media original antes de generar el `.ass` karaoke.
 
 - Si `faster-whisper` está disponible y la alineación es válida, el sistema usa timings reconciliados con el SRT.
+- Si el SRT entra tarde respecto al audio real, la reconciliación intenta recuperar también las palabras iniciales para
+  evitar solapes o saltos temporales dentro del karaoke final.
 - Si la alineación falla, no hay dependencia instalada o la calidad es baja, el proceso vuelve automáticamente al
   cálculo aproximado actual.
 - La primera alineación de un medio puede tardar más porque `faster-whisper` necesita cargar el modelo y generar el
