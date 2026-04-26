@@ -21,6 +21,8 @@ from src.infrastructure.subtitle_processor import SubtitleProcessor
 
 class FFmpegVideoProcessor(IVideoProcessor):
     IMAGE_EXTENSIONS = {".jpeg", ".jpg", ".png", ".webp"}
+    _LEFT_SPEAKER_CROP_X = "in_w/16"
+    _RIGHT_SPEAKER_CROP_X = "in_w/2-in_w/16"
 
     def __init__(
         self,
@@ -111,35 +113,30 @@ class FFmpegVideoProcessor(IVideoProcessor):
 
     @staticmethod
     def _build_split_screen_video_stream(source_video_stream, target_format: VideoFormat):
-        # Create two streams for left and right speakers
         split = source_video_stream.split()
-        left = split[0]
-        right = split[1]
-
-        # Left speaker: crop left half, scale to 1080 width, crop center to half-height
-        left = left.filter("crop", "in_w/2", "in_h", "0", "0")
-        left = left.filter("scale", target_format.width, "-1")
-        left = left.filter(
-            "crop",
-            target_format.width,
-            target_format.height // 2,
-            "0",
-            "(in_h-out_h)/2",
+        left = FFmpegVideoProcessor._build_speaker_stream(
+            speaker_stream=split[0],
+            speaker_crop_x=FFmpegVideoProcessor._LEFT_SPEAKER_CROP_X,
+            target_format=target_format,
         )
-
-        # Right speaker: crop right half, scale to 1080 width, crop center to half-height
-        right = right.filter("crop", "in_w/2", "in_h", "in_w/2", "0")
-        right = right.filter("scale", target_format.width, "-1")
-        right = right.filter(
-            "crop",
-            target_format.width,
-            target_format.height // 2,
-            "0",
-            "(in_h-out_h)/2",
+        right = FFmpegVideoProcessor._build_speaker_stream(
+            speaker_stream=split[1],
+            speaker_crop_x=FFmpegVideoProcessor._RIGHT_SPEAKER_CROP_X,
+            target_format=target_format,
         )
-
-        # Stack them vertically to form a 1080x1920 video
         return ffmpeg.filter([left, right], "vstack")
+
+    @staticmethod
+    def _build_speaker_stream(speaker_stream, speaker_crop_x: str, target_format: VideoFormat):
+        speaker_stream = speaker_stream.filter("crop", "in_w/2", "in_h", speaker_crop_x, "0")
+        speaker_stream = speaker_stream.filter("scale", target_format.width, "-1")
+        return speaker_stream.filter(
+            "crop",
+            target_format.width,
+            target_format.height // 2,
+            "0",
+            "(in_h-out_h)/2",
+        )
 
     @staticmethod
     def _append_outro_if_enabled(
