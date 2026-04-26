@@ -37,6 +37,10 @@ flowchart TB
     CLI["CLI<br/>main.py"]:::delivery
 
     subgraph APP["Application"]
+        RI["ResolveIntervalsUseCase"]:::app
+        ICG["IntervalCandidateGenerator"]:::app
+        IVS["IntervalViralityScorer"]:::app
+        IAS["DiversityAwareIntervalSelector"]:::app
         UC["GenerateShortUseCase"]:::app
         BPLAN["BuildShortEditingPlanUseCase"]:::app
         BEATS["ImpactBeatDetector"]:::app
@@ -48,6 +52,7 @@ flowchart TB
 
     subgraph DOMAIN["Domain"]
         PORT["IVideoProcessor"]:::domain
+        IPORT["ISubtitleIntervalGenerator"]:::domain
         BPORT["IBrollAssetProvider /<br/>IBrollArtifactsWriter"]:::domain
         ENT["Video / ShortVideo"]:::domain
         VO["TimeInterval / VideoFormat"]:::domain
@@ -58,6 +63,7 @@ flowchart TB
 
     subgraph INFRA["Infrastructure"]
         FFMPEG["FFmpegVideoProcessor"]:::infra
+        VIG["ViralSubtitleIntervalGenerator"]:::infra
         SUB["SubtitleProcessor<br/>facade"]:::infra
         PARSER["SubtitleParser"]:::infra
         ALIGN["FasterWhisperWordAligner"]:::infra
@@ -81,102 +87,63 @@ flowchart TB
     ASSFILE[("short_N.ass")]:::artifact
     AUDIT[("impact_beats / candidates /<br/>plan JSON")]:::artifact
 
-    CLI e1@--> UC
-    UC e2@--> PORT
-    UC e3@--> ENT
-    UC e4@--> VO
+    CLI --> RI
+    RI --> IPORT
+    RI --> UC
+    UC --> PORT
+    UC --> ENT
+    UC --> VO
 
-    FFMPEG e5@-.-> PORT
-    FFMPEG e6@--> SUB
-    FFMPEG e7@--> ENT
-    FFMPEG e8@--> VO
-    FFMPEG e25@--> BPLAN
-    FFMPEG e26@--> PLANW
+    VIG --> ICG
+    VIG --> IVS
+    VIG --> IAS
+    VIG --> PARSER
+    VIG -.-> IPORT
 
-    SUB e9@--> PARSER
-    SUB e10@--> ALIGN
-    SUB e11@--> CACHE
-    SUB e12@--> REC
-    SUB e13@--> PROJ
-    SUB e14@--> ASS
-    SUB e15@--> APPROX
-    SUB e16@--> CFG
+    FFMPEG -.-> PORT
+    FFMPEG --> SUB
+    FFMPEG --> ENT
+    FFMPEG --> VO
+    FFMPEG --> BPLAN
+    FFMPEG --> PLANW
 
-    PARSER e17@--> MODELS
-    ALIGN e18@--> MODELS
-    REC e19@--> MODELS
-    PROJ e20@--> VO
-    ALIGN e21@--> MEDIA
-    CACHE e22@--> CACHEFS
-    ASS e23@--> ASSFILE
-    ASS e24@--> CFG
-    BPLAN e27@--> BEATS
-    BPLAN e28@--> ORES
-    BPLAN e29@--> QGEN
-    BPLAN e30@--> RANK
-    BPLAN e31@--> IPLAN
-    BPLAN e32@--> BPORT
-    BPLAN e33@--> BMODELS
-    ORES e34@--> OMODEL
-    OLOAD e35@--> OMODEL
-    FFMPEG e36@--> OLOAD
-    PLANW e37@--> AUDIT
-    LOCAL e38@-.-> BPORT
-    PEX e39@-.-> BPORT
-    PIX e40@-.-> BPORT
-    PEX e41@--> LCACHE
-    PIX e42@--> LCACHE
-    LCACHE e43@--> BROLLCACHE
-    LOCAL e44@--> BMODELS
-    PEX e45@--> BMODELS
-    PIX e46@--> BMODELS
+    SUB --> PARSER
+    SUB --> ALIGN
+    SUB --> CACHE
+    SUB --> REC
+    SUB --> PROJ
+    SUB --> ASS
+    SUB --> APPROX
+    SUB --> CFG
 
-    e1@{ animate: true }
-    e2@{ animate: true }
-    e3@{ animate: true }
-    e4@{ animate: true }
-    e5@{ animate: true }
-    e6@{ animate: true }
-    e7@{ animate: true }
-    e8@{ animate: true }
-    e9@{ animate: true }
-    e10@{ animate: true }
-    e11@{ animate: true }
-    e12@{ animate: true }
-    e13@{ animate: true }
-    e14@{ animate: true }
-    e15@{ animate: true }
-    e16@{ animate: true }
-    e17@{ animate: true }
-    e18@{ animate: true }
-    e19@{ animate: true }
-    e20@{ animate: true }
-    e21@{ animate: true }
-    e22@{ animate: true }
-    e23@{ animate: true }
-    e24@{ animate: true }
-    e25@{ animate: true }
-    e26@{ animate: true }
-    e27@{ animate: true }
-    e28@{ animate: true }
-    e29@{ animate: true }
-    e30@{ animate: true }
-    e31@{ animate: true }
-    e32@{ animate: true }
-    e33@{ animate: true }
-    e34@{ animate: true }
-    e35@{ animate: true }
-    e36@{ animate: true }
-    e37@{ animate: true }
-    e38@{ animate: true }
-    e39@{ animate: true }
-    e40@{ animate: true }
-    e41@{ animate: true }
-    e42@{ animate: true }
-    e43@{ animate: true }
-    e44@{ animate: true }
-    e45@{ animate: true }
-    e46@{ animate: true }
+    PARSER --> MODELS
+    ALIGN --> MODELS
+    REC --> MODELS
+    PROJ --> VO
+    ALIGN --> MEDIA
+    CACHE --> CACHEFS
+    ASS --> ASSFILE
+    ASS --> CFG
+    BPLAN --> BEATS
+    BPLAN --> ORES
+    BPLAN --> QGEN
+    BPLAN --> RANK
+    BPLAN --> IPLAN
+    BPLAN --> BPORT
+    BPLAN --> BMODELS
+    ORES --> OMODEL
+    OLOAD --> OMODEL
+    FFMPEG --> OLOAD
+    PLANW --> AUDIT
+    LOCAL -.-> BPORT
+    PEX -.-> BPORT
+    PIX -.-> BPORT
+    PEX --> LCACHE
+    PIX --> LCACHE
+    LCACHE --> BROLLCACHE
+    LOCAL --> BMODELS
+    PEX --> BMODELS
+    PIX --> BMODELS
 
     classDef delivery fill:#ffd7c2,stroke:#b45622,color:#24150c
     classDef app fill:#d9e9ff,stroke:#355e9b,color:#142033

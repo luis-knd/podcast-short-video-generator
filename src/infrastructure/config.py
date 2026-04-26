@@ -59,6 +59,9 @@ class ConfigManager:
     def get_broll_setting(self, name: str, default: any) -> any:
         return self.config.get("broll", {}).get(name, default)
 
+    def get_interval_generation_setting(self, name: str, default: any) -> any:
+        return self.config.get("interval_generation", {}).get(name, default)
+
     @staticmethod
     def hex_to_ass_color(hex_color: str) -> str:
         """Converts #RRGGBB to &HBBGGRR& ASS format"""

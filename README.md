@@ -11,7 +11,7 @@ generar videos verticales en formato de YouTube Shorts utilizando intervalos de 
 
 **Nuevas características:**
 
-- **Formato Vertical de Pantalla Dividida**: Automáticamente recorta las mitades izquierda y derecha del video original
+- **Formato Vertical de Pantalla Dividida**: Automáticamente, recorta las mitades izquierda y derecha del video original
 y las apila verticalmente para llenar el formato 9:16.
 - **Subtítulos estilo Karaoke Progresivo**: Genera subtítulos dinámicos donde las palabras se resplandecen de manera
 secuencial de acuerdo al audio.
@@ -35,7 +35,7 @@ Guiado por Pruebas (TDD)**.
    - [Ejecutar el Generador](#ejecutar-el-generador)
 4. [Arquitectura del Proyecto](#arquitectura-del-proyecto)
 5. [Flujo de Ejecución (Diagrama de Uso)](#flujo-de-ejecución-diagrama-de-uso)
-6. [Flujo de Ejecución (Diagrama de Secuencia)](#flujo-de-ejecución-diagrama-de-secuencia)
+6. [Flujo de Ejecución (Diagrama de secuencia)](#flujo-de-ejecución-diagrama-de-secuencia)
 7. [Desarrollo y Pruebas](#desarrollo-y-pruebas)
    - [Pruebas Unitarias](#pruebas-unitarias)
    - [Pruebas de Mutación](#pruebas-de-mutación)
@@ -166,6 +166,16 @@ generados:
     ],
     "overrides_filepath": "inputs/broll-overrides.json"
   },
+  "interval_generation": {
+    "provider": "auto",
+    "target_count": 11,
+    "min_duration_ms": 18000,
+    "max_duration_ms": 42000,
+    "llm_model": "gemini-2.5-flash",
+    "llm_timeout_seconds": 45,
+    "llm_retry_attempts": 2,
+    "llm_temperature": 0.2
+  },
   "subtitles": {
     "active_border_color_hex": "#000000",
     "base_border_color_hex": "#000000",
@@ -192,7 +202,18 @@ a medida que se pronuncian en el modo "karaoke".
   - `min_gap_ms`: Distancia mínima entre inserciones dentro de un mismo short.
   - `overlay_top_y`: Posición "Y" inicial de overlays para evitar conflicto con subtítulos.
   - `local_search_dirs`: Carpetas opcionales con una librería local de medios para fallback de B-roll.
-  - `overrides_filepath`: Ruta opcional al archivo de overrides manuales. Si se omite, se usa `inputs/broll-overrides.json`.
+  - `overrides_filepath`: Ruta opcional al archivo de overrides manuales. Si se omite, se usa
+    `inputs/broll-overrides.json`.
+- **`interval_generation`**:
+  - `provider`: `auto`, `gemini` o `heuristic`. En `auto`, usa Gemini si `GEMINI_API_KEY` está disponible y, si no,
+    cae al selector heurístico actual.
+  - `target_count`: número máximo de recortes sugeridos.
+  - `min_duration_ms` / `max_duration_ms`: límites duros de duración validados sobre los cues reales.
+  - `llm_model`: modelo Gemini Flash a utilizar para seleccionar segmentos.
+  - `llm_timeout_seconds`: timeout de la llamada a la API antes de hacer fallback.
+  - `llm_retry_attempts`: número de intentos ante timeout del proveedor antes de caer al selector heurístico.
+  - `llm_temperature`: creatividad del modelo. Un valor bajo reduce respuestas erráticas.
+  - Puedes sobreescribir `llm_model` desde entorno con `GEMINI_MODEL` sin tocar `config.json`.
 - **`subtitles`**:
   - `base_color_hex`: El color base inactivo del texto.
   - `font_name`: El nombre de la fuente tipográfica a utilizar.
@@ -215,15 +236,17 @@ edición antes del render final.
 - El repo ya incluye un `inputs/broll-overrides.json` de ejemplo activo para `short_2`.
 - El repo ya incluye una libreria local base en `inputs/broll/library` con `broll-metadata.json`.
 - Si falla la detección, la búsqueda o la descarga de assets, el short se sigue generando sin B-roll.
-- Si un override manual apunta a un video con audio, el pipeline ignora siempre ese audio y conserva el audio original del short.
+- Si un override manual apunta a un video con audio, el pipeline ignora siempre ese audio y conserva el audio original
+  del short.
 
 #### Proveedores soportados
 
 - `Pexels`: requiere `PEXELS_API_KEY` en `.env` o en variables de entorno del sistema.
 - `Pixabay`: requiere `PIXABAY_API_KEY` en `.env` o en variables de entorno del sistema.
-- `local_search_dirs`: libreria local para imágenes y videos (`.jpg`, `.jpeg`, `.png`, `.webp`, `.mp4`, `.mov`, `.webm`, `.m4v`).
+- `local_search_dirs`: libreria local para imágenes y videos (`.jpg`, `.jpeg`, `.png`, `.webp`, `.mp4`, `.mov`, `.webm`,
+  `.m4v`).
 
-#### Como se puntua un candidato de B-roll
+#### Como se puntúa un candidato de B-roll
 
 Cada asset encontrado no se usa directamente. Primero recibe un `total_score` entre `0.0` y `1.0` en
 `src/application/broll/broll_candidate_ranker.py`.
@@ -240,16 +263,16 @@ total_score =
   0.05 * technical_quality
 ```
 
-Interpretacion de cada subscore:
+Interpretación de cada subscore:
 
 - `semantic_match`: cuanto coincide el significado del beat con el asset. Se calcula comparando tokens del beat y de
-  las queries contra `title`, `tags`, `description` y nombre del archivo. Es el factor mas importante.
+  las queries contra `title`, `tags`, `description` y nombre del archivo. Es el factor más importante.
 - `visual_fit`: premia que el asset sea video y que encaje bien en vertical.
-- `duration_fit`: mide si el clip sirve para cubrir la duracion del beat. Si el video dura lo suficiente, puntua alto.
-- `orientation_fit`: vuelve a valorar la orientacion. `vertical` puntua mejor que `square`, y `square` mejor que
+- `duration_fit`: mide si el clip sirve para cubrir la duración del beat. Si el video dura lo suficiente, puntúa alto.
+- `orientation_fit`: vuelve a valorar la orientación. `vertical` puntúa mejor que `square`, y `square` mejor que
   `landscape`.
 - `diversity_bonus`: pequeño bonus cuando el asset trae metadata util, sobre todo `tags`.
-- `technical_quality`: valora la resolucion. Pesa poco frente al match semantico.
+- `technical_quality`: valora la resolución. Pesa poco frente al match semantico.
 
 Ejemplo simplificado:
 
@@ -264,10 +287,10 @@ technical_quality = 0.40
 total_score = 0.77
 ```
 
-Importante: `total_score` no significa automaticamente "usar este video". El planner aplica despues filtros minimos
+Importante: `total_score` no significa automaticamente "usar este video". El planner aplica después filtros mínimos
 adicionales en `src/application/broll/broll_insertion_planner.py`.
 
-Minimos actuales:
+Mínimos actuales:
 
 - `minimum_candidate_score = 0.55`
 - `automatic_candidate_semantic_match_threshold = 0.30`
@@ -275,8 +298,8 @@ Minimos actuales:
 
 Eso significa:
 
-- un candidato puede tener `total_score` aceptable y aun asi quedar fuera si el `semantic_match` es flojo
-- los `support beats` exigen un match semantico mas estricto que los beats fuertes
+- un candidato puede tener `total_score` aceptable y aun asi quedar fuera si él `semantic_match` es flojo
+- los `support beats` exigen un match semantico más estricto que los beats fuertes
 - este filtro extra evita inserciones incoherentes por palabras incidentales, por ejemplo elegir un clip solo porque
   comparte un token aislado como `birds`
 
@@ -410,7 +433,7 @@ El archivo que viene en el repo usa estos dos clips de ejemplo:
 
 #### Artefactos generados cuando B-roll está activo
 
-Por cada short se generan JSON auditables junto al output:
+Por cada short se generan JSON auditables con su output:
 
 - `short_N.impact_beats.json`
 - `short_N.broll_candidates.json`
@@ -418,11 +441,11 @@ Por cada short se generan JSON auditables junto al output:
 
 Estos archivos permiten revisar:
 
-- que beats fueron detectados
-- que queries y candidatos se evaluaron
-- de donde vino cada candidato mediante `discovery_source`
-- qué inserciones se aplicaron o se descartaron
-- si una inserción vino de `manual_override`, `local_manifest`, `local_heuristic_fallback`, `pexels` o `pixabay`
+- Qué beats fueron detectados
+- Qué queries y candidatos se evaluaron
+- De donde vino cada candidato mediante `discovery_source`
+- Qué inserciones se aplicaron o se descartaron
+- Si una inserción vino de `manual_override`, `local_manifest`, `local_heuristic_fallback`, `pexels` o `pixabay`
 
 ### Formato del JSON de Intervalos
 Por defecto, **(`inputs/recortes.json`)**
@@ -447,6 +470,62 @@ Cada objeto en este array resultará en la creación de un Short independiente e
 
 _(En este ejemplo, se generarán 3 Shorts distintos a partir del mismo video)._
 
+### Generación automática de `recortes.json`
+
+Si no quieres preparar `inputs/recortes.json` manualmente, el pipeline ahora puede inferirlo a partir del `.srt`:
+
+- Si `--intervals` **no existe**, la CLI genera automáticamente un JSON compatible antes de renderizar los shorts
+- Si `--intervals` **ya existe**, se sigue usando el archivo manual tal como hasta ahora
+- Si quieres **regenerarlo** desde cero aunque el archivo exista, usa `--auto-intervals`
+
+El comportamiento recomendado para `EWS-20` es habilitar un LLM pequeño vía API con `GEMINI_API_KEY` en tú `.env`.
+Cuando esa clave existe y `interval_generation.provider` está en `auto` o `gemini`, el pipeline envía los cues del
+transcript a Gemini Flash para que seleccione segmentos que:
+
+- abran con hook real
+- cierren cuando la idea ya quedó resuelta
+- eviten intros, CTA y contexto débil
+- prioricen valor práctico, tensión, payoff y capacidad de share
+
+Si la API no está configurado, responde mal o agota el timeout, el sistema hace fallback seguro al selector heurístico
+para no romper la generación base.
+
+La selección automática ya no depende de una única partición rígida del transcript. El flujo actual hace tres pasos:
+
+1. **Transcript grounding**: serializa los cues del `.srt` con sus `cue_id` y timestamps reales
+2. **LLM selection**: Gemini Flash elige intervalos con inicio/fin por `cue_id`, pensando en hook, cierre y CTR
+3. **Safe fallback**: si la respuesta no es válida, vuelve al pipeline heurístico (candidate generation + scoring +
+   selector)
+
+El scoring también penaliza:
+- Intros y framing genérico al inicio del episodio
+- CTA / boilerplate como `subscribe`, `podcast`, `welcome`
+- Outs y cierres poco compartibles
+
+Para activarlo, copia `.env.example` a `.env` y rellena al menos:
+
+```dotenv
+GEMINI_API_KEY=tu_clave
+GEMINI_MODEL=gemini-3-flash-preview
+```
+
+Si ya existe `inputs/recortes.json` y ejecutas `python main.py` sin `--auto-intervals`, el sistema **reutiliza** ese
+archivo tal cual. Para regenerarlo con Gemini o con el selector automático configurado, usa explícitamente:
+
+```bash
+python main.py --auto-intervals
+```
+
+El archivo generado se guarda en la misma ruta indicada por `--intervals`, de modo que puedes revisarlo o ajustarlo a
+mano después del primer pase automático.
+
+Si usas `--auto-intervals` y ya existe un `recortes.json` manual:
+
+- El sistema intenta regenerarlo siempre
+- **Solo** sobrescribe el archivo cuando el nuevo resultado automático es válido y no vacío
+- Si la regeneración falla y el archivo manual existente era válido, el archivo se preserva y el pipeline hace fallback
+  con warning
+
 ### Ejecutar el Generador
 
 Si colocas tus archivos con los nombres por defecto en la carpeta `inputs/` (`video.mp4`, `video.srt`, `recortes.json`),
@@ -456,6 +535,9 @@ puedes ejecutar el comando principal de forma muy sencilla:
 python main.py
 ```
 
+Si `inputs/recortes.json` no existe, ese mismo comando intentará generarlo automáticamente desde `inputs/video.srt`
+antes de crear los shorts.
+
 O especificando tus propias rutas, en caso de tener nombres diferentes:
 
 ```bash
@@ -464,6 +546,17 @@ python main.py \
   --subs inputs/mi_video_podcast.srt \
   --intervals inputs/recortes.json \
   --output outputs/
+```
+
+Para forzar la regeneración del archivo de intervalos desde el `.srt` aunque ya exista uno manual:
+
+```bash
+python main.py \
+  --video inputs/mi_video_podcast.mp4 \
+  --subs inputs/mi_video_podcast.srt \
+  --intervals inputs/recortes.json \
+  --output outputs/ \
+  --auto-intervals
 ```
 
 Para activar el outro opcional (bajo demanda) y aplicar transición suave:
@@ -492,15 +585,21 @@ python main.py \
 
 #### Argumentos:
 
-- `--video`: (Opcional) Ruta al video horizontal base (por defecto: `inputs/video.mp4`).
+- `--video`: (Opcional) Ruta del video horizontal base (por defecto: `inputs/video.mp4`).
 - `--subs`: (Opcional) Ruta al archivo de subtítulos correspondiente (por defecto: `inputs/video.srt`).
-- `--intervals`: (Opcional) Ruta al archivo JSON con los intervalos deseados (por defecto: `inputs/recortes.json`).
+- `--intervals`: (Opcional) Ruta al archivo JSON con los intervalos deseados o donde se persistirá el JSON autogenerado
+  (por defecto: `inputs/recortes.json`).
+- `--auto-intervals`: (Opcional) Fuerza regenerar el archivo de intervalos automáticamente desde él `.srt` con análisis
+  orientado a viralidad. Si el resultado es válido, sobrescribe la ruta indicada en `--intervals`; si falla y hay un
+  manual válido, ese archivo se preserva.
 - `--output`: (Opcional) Carpeta donde se guardarán los resultados (por defecto: `outputs`).
 - `--enable-outro`: (Opcional) Habilita la adición de outro al final de cada short generado.
-- `--outro`: (Opcional) Ruta del video de outro usado cuando `--enable-outro` está activo (por defecto: `inputs/outroShort.mp4`).
+- `--outro`: (Opcional) Ruta del video de outro usado cuando `--enable-outro` está activo (por defecto:
+  `inputs/outroShort.mp4`).
 - `--fade-duration`: (Opcional) Duración en segundos del fade de transición short/outro (por defecto: `0.7`).
 
-> Si `--enable-outro` está activo y el archivo de outro no existe, la aplicación continúa generando los shorts sin outro y muestra un `Warning` en consola.
+> Si `--enable-outro` está activo y el archivo de outro no existe, la aplicación continúa generando los shorts sin outro
+> y muestra un `Warning` en consola.
 
 #### ¿Dónde se generan los Shorts?
 
@@ -548,7 +647,8 @@ El pipeline de B-roll se apoya en ese timeline alineado:
 - `ImpactBeatDetector`: identifica beats visualmente reforzables.
 - `BrollQueryGenerator`: genera queries semánticas para stock/local media.
 - `BrollCandidateRanker`: puntúa relevancia y calidad técnica.
-- `ManualBrollOverrideResolver`: fuerza assets manuales por `short_id + anchor_text` y puede sintetizar un beat si el detector no lo emitió.
+- `ManualBrollOverrideResolver`: fuerza assets manuales por `short_id + anchor_text` y puede sintetizar un beat si el
+  detector no lo emitió.
 - `BrollInsertionPlanner`: decide `overlay` vs. `cutaway`, soporta `full_frame_cutaway`, trims y spacing.
 - `BrollPlanJsonWriter`: persiste `impact_beats.json`, `broll_candidates.json` y `broll_plan.json`.
 
@@ -565,7 +665,7 @@ Fuente Mermaid: `docs/usage.mmd`
 
 ---
 
-## Flujo de Ejecución (Diagrama de Secuencia)
+## Flujo de Ejecución (Diagrama de secuencia)
 
 Este diagrama enfatiza el orden temporal entre la CLI, el caso de uso, el pipeline de subtítulos, la caché de
 alineación, la planificación de B-roll y el render final. Es la vista más útil para entender cuándo se reutiliza
@@ -716,7 +816,7 @@ Las herramientas integradas incluyen:
 
 ### Cómo Contribuir
 
-¡Las contribuciones son bienvenidas! Sigue estos pasos para colaborar:
+¡Las contribuciones son bienvenidas!, sigue estos pasos para colaborar:
 
 1. Haz un **Fork** del repositorio.
 2. Crea una rama para tu nueva característica o solución siguiendo el patrón del repo:

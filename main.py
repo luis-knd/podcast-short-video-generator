@@ -1,15 +1,15 @@
 import argparse
-import json
 import os
 import sys
 
-from src.application.use_cases import GenerateShortUseCase
-from src.domain.exceptions import ShortGeneratorError
+from src.application.cli_runner import CliExecutionRequest, RunShortsCliUseCase
+from src.application.use_cases import GenerateShortUseCase, ResolveIntervalsUseCase
 from src.infrastructure.ffmpeg_processor import FFmpegVideoProcessor
-from src.interfaces.cli_utils import resolve_outro_filepath
+from src.infrastructure.subtitles import IntervalGeneratorFactory
+from src.interfaces.cli_utils import persist_intervals_json, resolve_existing_intervals_file, resolve_outro_filepath
 
 
-def main():
+def build_argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Generate Shorts from a video with subtitles.")
     parser.add_argument(
         "--video",
@@ -28,6 +28,11 @@ def main():
         type=str,
         default="inputs/recortes.json",
         help="Path to a JSON file containing intervals (default: inputs/recortes.json)",
+    )
+    parser.add_argument(
+        "--auto-intervals",
+        action="store_true",
+        help="Force automatic interval generation from the subtitles file and persist it to --intervals",
     )
     parser.add_argument(
         "--output",
@@ -52,60 +57,56 @@ def main():
         default=0.7,
         help="Fade transition duration in seconds (default: 0.7)",
     )
+    return parser
 
-    args = parser.parse_args()
 
-    if not os.path.exists(args.video):
-        print(f"Error: Video file not found: {args.video}")
-        sys.exit(1)
-
-    if not os.path.exists(args.subs):
-        print(f"Error: Subtitles file not found: {args.subs}")
-        sys.exit(1)
-
-    if not os.path.exists(args.intervals):
-        print(f"Error: Intervals JSON file not found: {args.intervals}")
-        sys.exit(1)
-    if args.fade_duration < 0:
-        print("Error: --fade-duration must be greater than or equal to 0")
-        sys.exit(1)
-
-    os.makedirs(args.output, exist_ok=True)
-
-    outro_filepath, outro_warning = resolve_outro_filepath(enable_outro=args.enable_outro, outro_filepath=args.outro)
-    if outro_warning:
-        print(outro_warning)
-
-    with open(args.intervals) as f:
-        try:
-            intervals_json = json.load(f)
-        except json.JSONDecodeError as e:
-            print(f"Error: Invalid JSON formulation in {args.intervals}\n{e}")
-            sys.exit(1)
-
-    # Dependency Injection
+def build_cli_use_case() -> RunShortsCliUseCase:
     processor = FFmpegVideoProcessor()
-    use_case = GenerateShortUseCase(video_processor=processor)
+    generate_short_use_case = GenerateShortUseCase(video_processor=processor)
 
-    print(f"Generating {len(intervals_json)} shorts...")
+    return RunShortsCliUseCase(
+        file_exists=os.path.exists,
+        resolve_outro=resolve_outro_filepath,
+        load_intervals=resolve_existing_intervals_file,
+        interval_generator_factory=IntervalGeneratorFactory.build,
+        create_interval_resolver=create_interval_resolver,
+        persist_intervals=persist_intervals_json,
+        generate_shorts=generate_short_use_case.execute,
+        ensure_output_dir=ensure_output_dir,
+    )
 
-    try:
-        shorts = use_case.execute(
-            video_filepath=args.video,
-            subtitles_filepath=args.subs,
-            intervals_json=intervals_json,
-            output_dir=args.output,
-            outro_filepath=outro_filepath,
-            fade_duration=args.fade_duration,
-        )
 
-        print(f"Successfully generated {len(shorts)} shorts in {args.output}/")
-        for short in shorts:
-            print(f" - {short.filepath}")
+def create_interval_resolver(interval_generator):
+    return ResolveIntervalsUseCase(interval_generator=interval_generator).execute
 
-    except ShortGeneratorError as e:
-        print(f"An error occurred during processing: {e}")
-        sys.exit(1)
+
+def ensure_output_dir(output_dir: str) -> None:
+    os.makedirs(output_dir, exist_ok=True)
+
+
+def to_cli_execution_request(args: argparse.Namespace) -> CliExecutionRequest:
+    return CliExecutionRequest(
+        video_filepath=args.video,
+        subtitles_filepath=args.subs,
+        intervals_filepath=args.intervals,
+        output_dir=args.output,
+        enable_outro=args.enable_outro,
+        outro_filepath=args.outro,
+        fade_duration=args.fade_duration,
+        auto_intervals=bool(args.auto_intervals),
+    )
+
+
+def main():
+    parser = build_argument_parser()
+    args = parser.parse_args()
+    result = build_cli_use_case().execute(to_cli_execution_request(args))
+
+    for message in result.output_messages:
+        print(message)
+
+    if result.exit_code != 0:
+        sys.exit(result.exit_code)
 
 
 if __name__ == "__main__":

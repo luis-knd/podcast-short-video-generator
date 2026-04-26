@@ -24,6 +24,16 @@ class IVideoProcessor(abc.ABC):
         pass  # pragma: no cover
 
 
+class ISubtitleIntervalGenerator(abc.ABC):
+    @abc.abstractmethod
+    def generate(self, subtitles_filepath: str) -> list[dict[str, str]]:
+        """
+        Infers short-ready intervals from a subtitle file and returns the JSON-compatible
+        contract consumed by the existing shorts' use case.
+        """
+        pass  # pragma: no cover
+
+
 class IBrollAssetProvider(abc.ABC):
     @abc.abstractmethod
     def search(

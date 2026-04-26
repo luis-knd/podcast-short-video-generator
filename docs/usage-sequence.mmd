@@ -43,6 +43,11 @@ sequenceDiagram
     autonumber
     actor U as User
     participant CLI as main.py CLI
+    participant RI as ResolveIntervalsUseCase
+    participant VIG as ViralSubtitleIntervalGenerator
+    participant CG as IntervalCandidateGenerator
+    participant VS as IntervalViralityScorer
+    participant SEL as DiversityAwareIntervalSelector
     participant UC as GenerateShortUseCase
     participant VP as FFmpegVideoProcessor
     participant SP as SubtitleProcessor
@@ -61,6 +66,25 @@ sequenceDiagram
     participant FF as ffmpeg
 
     U->>+CLI: Run generator with video, subtitles and intervals
+    alt manual intervals exist and --auto-intervals is false
+        CLI->>CLI: reuse existing recortes.json
+    else missing intervals or forced auto regeneration
+        CLI->>+RI: execute(subs, manual_intervals, force_auto_generation)
+        RI->>+VIG: generate(subtitles_filepath)
+        VIG->>+CG: build candidates from SubtitleCue
+        CG-->>-VIG: interval candidates
+        VIG->>+VS: score candidates for virality
+        VS-->>-VIG: scored candidates
+        VIG->>+SEL: select diverse top intervals
+        SEL-->>-VIG: selected intervals
+        VIG-->>-RI: JSON-compatible intervals
+        RI-->>-CLI: resolved intervals + warnings
+        alt auto generation succeeded
+            CLI->>CLI: overwrite --intervals path atomically
+        else fallback to valid manual file
+            CLI->>CLI: preserve manual recortes.json
+        end
+    end
     CLI->>+UC: execute(video, subs, intervals, output)
     loop for each interval
         UC->>+VP: generate_short(video, interval, format, output)
