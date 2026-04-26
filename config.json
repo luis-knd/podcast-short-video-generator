@@ -23,6 +23,16 @@
     "overlay_top_y": 120,
     "overrides_filepath": "inputs/broll-overrides.json"
   },
+  "interval_generation": {
+    "llm_model": "gemini-2.5-flash",
+    "llm_retry_attempts": 2,
+    "llm_temperature": 0.2,
+    "llm_timeout_seconds": 45,
+    "max_duration_ms": 42000,
+    "min_duration_ms": 18000,
+    "provider": "auto",
+    "target_count": 11
+  },
   "subtitles": {
     "active_border_color_hex": "#000000",
     "base_border_color_hex": "#000000",

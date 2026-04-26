@@ -59,75 +59,40 @@ flowchart TD
     OUTPUT([short_N.mp4 ready]):::entry
     DONE([CLI prints generated outputs]):::entry
 
-    USER e1@--> VALIDATE
-    VALIDATE e2@--> EXECUTE
-    EXECUTE e3@--> LOOP
-    LOOP e4@--> GENERATE
-    GENERATE e5@--> SUBS
-    SUBS e6@--> ALIGN_ENABLED
-    ALIGN_ENABLED e7@-- yes --> LOAD_RAW
-    ALIGN_ENABLED e8@-- no --> FALLBACK
-    LOAD_RAW e9@--> RAW_HIT
-    RAW_HIT e10@-- no --> ALIGN
-    RAW_HIT e11@-- yes --> LOAD_REC
-    ALIGN e12@--> SAVE_RAW
-    SAVE_RAW e13@--> LOAD_REC
-    LOAD_REC e14@--> REC_HIT
-    REC_HIT e15@-- no --> REC
-    REC_HIT e16@-- yes --> PROJECT
-    REC e17@--> SAVE_REC
-    SAVE_REC e18@--> PROJECT
-    FALLBACK e19@--> PROJECT
-    PROJECT e20@--> WRITE_ASS
-    WRITE_ASS e21@--> BROLL_ENABLED
-    BROLL_ENABLED e22@-- yes --> DETECT
-    BROLL_ENABLED e23@-- no --> RENDER
-    DETECT e24@--> OVERRIDE
-    OVERRIDE e25@--> SEARCH
-    SEARCH e26@--> PLAN
-    PLAN e27@--> COMPOSE
-    COMPOSE e28@--> RENDER
-    RENDER e29@--> OUTRO
-    OUTRO e30@-- yes --> CONCAT
-    OUTRO e31@-- no --> OUTPUT
-    CONCAT e32@--> OUTPUT
-    OUTPUT e33@--> LOOP
-    LOOP e34@-- done --> DONE
-
-    e1@{ animate: true }
-    e2@{ animate: true }
-    e3@{ animate: true }
-    e4@{ animate: true }
-    e5@{ animate: true }
-    e6@{ animate: true }
-    e7@{ animate: true }
-    e8@{ animate: true }
-    e9@{ animate: true }
-    e10@{ animate: true }
-    e11@{ animate: true }
-    e12@{ animate: true }
-    e13@{ animate: true }
-    e14@{ animate: true }
-    e15@{ animate: true }
-    e16@{ animate: true }
-    e17@{ animate: true }
-    e18@{ animate: true }
-    e19@{ animate: true }
-    e20@{ animate: true }
-    e21@{ animate: true }
-    e22@{ animate: true }
-    e23@{ animate: true }
-    e24@{ animate: true }
-    e25@{ animate: true }
-    e26@{ animate: true }
-    e27@{ animate: true }
-    e28@{ animate: true }
-    e29@{ animate: true }
-    e30@{ animate: true }
-    e31@{ animate: true }
-    e32@{ animate: true }
-    e33@{ animate: true }
-    e34@{ animate: true }
+    USER --> VALIDATE
+    VALIDATE --> EXECUTE
+    EXECUTE --> LOOP
+    LOOP --> GENERATE
+    GENERATE --> SUBS
+    SUBS --> ALIGN_ENABLED
+    ALIGN_ENABLED -- yes --> LOAD_RAW
+    ALIGN_ENABLED -- no --> FALLBACK
+    LOAD_RAW --> RAW_HIT
+    RAW_HIT -- no --> ALIGN
+    RAW_HIT -- yes --> LOAD_REC
+    ALIGN --> SAVE_RAW
+    SAVE_RAW --> LOAD_REC
+    LOAD_REC --> REC_HIT
+    REC_HIT -- no --> REC
+    REC_HIT -- yes --> PROJECT
+    REC --> SAVE_REC
+    SAVE_REC --> PROJECT
+    FALLBACK --> PROJECT
+    PROJECT --> WRITE_ASS
+    WRITE_ASS --> BROLL_ENABLED
+    BROLL_ENABLED -- yes --> DETECT
+    BROLL_ENABLED -- no --> RENDER
+    DETECT --> OVERRIDE
+    OVERRIDE --> SEARCH
+    SEARCH --> PLAN
+    PLAN --> COMPOSE
+    COMPOSE --> RENDER
+    RENDER --> OUTRO
+    OUTRO -- yes --> CONCAT
+    OUTRO -- no --> OUTPUT
+    CONCAT --> OUTPUT
+    OUTPUT --> LOOP
+    LOOP -- done --> DONE
 
     classDef entry fill:#ffd9c7,stroke:#b15b2f,color:#26140a
     classDef process fill:#dfeeff,stroke:#3963a3,color:#152036
