@@ -112,7 +112,7 @@ def test_reconciler_handles_empty_and_edge_interpolation_spans():
 def test_reconciler_defaults_candidate_window_and_quality_contract():
     reconciler = TranscriptReconciler()
 
-    assert reconciler.version == "v2"
+    assert reconciler.version == "v4"
     assert reconciler.match_window_ms == 1000
     assert reconciler.minimum_match_ratio == 0.6
     assert reconciler.fuzzy_threshold == 0.86

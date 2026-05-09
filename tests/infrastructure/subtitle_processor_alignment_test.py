@@ -241,7 +241,7 @@ def test_subtitle_processor_builds_reconciled_payload_with_expected_keys(tmp_pat
     assert fake_cache.reconciled_kwargs == {
         "subtitle_filepath": "input.srt",
         "raw_key": "raw-key",
-        "reconciliation_version": "v2",
+        "reconciliation_version": "v4",
     }
     reconciled_payload = fake_cache.saved_reconciled[0][1]
     assert fake_cache.saved_reconciled[0][0] == "reconciled-key"

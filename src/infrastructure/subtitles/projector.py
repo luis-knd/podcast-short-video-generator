@@ -7,6 +7,33 @@ class IntervalSubtitleProjector:
     def group_into_phrases(words: list[str], words_per_phrase: int = 4) -> list[list[str]]:
         return [words[index : index + words_per_phrase] for index in range(0, len(words), words_per_phrase)]
 
+    @staticmethod
+    def _normalize_segment_windows(segments: list[dict[str, object]]) -> list[dict[str, object]]:
+        normalized_segments: list[dict[str, object]] = []
+
+        for index, segment in enumerate(segments):
+            normalized_segment = dict(segment)
+            segment_start = IntervalSubtitleProjector._read_ms(normalized_segment, "start_ms")
+            segment_end = IntervalSubtitleProjector._read_ms(normalized_segment, "end_ms")
+
+            if index + 1 < len(segments):
+                next_segment_start = IntervalSubtitleProjector._read_ms(segments[index + 1], "start_ms")
+                segment_end = min(segment_end, next_segment_start)
+
+            normalized_segment["end_ms"] = max(segment_start, segment_end)
+            normalized_segments.append(normalized_segment)
+
+        return normalized_segments
+
+    @staticmethod
+    def _read_ms(segment: dict[str, object], key: str) -> int:
+        value = segment.get(key, 0)
+        if isinstance(value, bool):
+            return int(value)
+        if isinstance(value, (int, float, str)):
+            return int(value)
+        return 0
+
     def project(
         self,
         cues: list[ReconciledCue],
@@ -59,4 +86,4 @@ class IntervalSubtitleProjector:
                     }
                 )
 
-        return segments
+        return self._normalize_segment_windows(segments)

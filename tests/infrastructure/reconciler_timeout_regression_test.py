@@ -1,5 +1,5 @@
 from src.domain.subtitle_models import AlignedWord, SubtitleCue
-from src.infrastructure.subtitles.reconciler import TranscriptReconciler
+from src.infrastructure.subtitles.reconciler import CandidateMatch, TranscriptReconciler
 from tests.infrastructure.reconciler_support_test import watchdog
 
 
@@ -13,8 +13,8 @@ def test_build_reconciled_words_advances_past_resolved_slots():
         end_ms=500,
     )
     matches = [
-        (0, AlignedWord("alpha", "alpha", 50, 150, 0.9), "exact_normalized"),
-        (1, AlignedWord("beta", "beta", 200, 320, 0.85), "exact_normalized"),
+        CandidateMatch(0, 0, (AlignedWord("alpha", "alpha", 50, 150, 0.9),), "exact_normalized"),
+        CandidateMatch(1, 1, (AlignedWord("beta", "beta", 200, 320, 0.85),), "exact_normalized"),
     ]
 
     with watchdog():
