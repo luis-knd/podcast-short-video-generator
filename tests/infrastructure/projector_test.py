@@ -126,3 +126,29 @@ def test_projector_custom_words_per_phrase_splits_correctly():
     assert len(segments) == 2
     assert segments[0]["phrase_text"] == "w0 w1"
     assert segments[1]["phrase_text"] == "w2 w3"
+
+
+def test_projector_clips_adjacent_phrase_windows_to_prevent_overlap():
+    projector = IntervalSubtitleProjector()
+    words = [
+        _word("w0", 0, 200),
+        _word("w1", 200, 400),
+        _word("w2", 400, 600),
+        _word("w3", 600, 800),
+        _word("w4", 800, 1000),
+        _word("w5", 1000, 1600),
+        _word("w6", 1400, 1800),
+        _word("w7", 1800, 2200),
+    ]
+    cue = _cue("c-overlap", 0, 2200, words)
+    interval = TimeInterval(0.0, 3.0)
+
+    segments = projector.project([cue], interval)
+
+    assert len(segments) == 2
+    assert segments[0]["phrase_text"] == "w0 w1 w2 w3 w4 w5"
+    assert segments[1]["phrase_text"] == "w6 w7"
+    assert segments[0]["start_ms"] == 0
+    assert segments[0]["end_ms"] == 1400
+    assert segments[1]["start_ms"] == 1400
+    assert segments[1]["end_ms"] == 2200

@@ -1,3 +1,5 @@
+import re
+from dataclasses import dataclass
 from difflib import SequenceMatcher
 
 from src.domain.subtitle_models import AlignedWord, ReconciledCue, ReconciledWord, SubtitleCue
@@ -5,18 +7,32 @@ from src.domain.text_utils import normalize_token
 from src.infrastructure.subtitles.approximate_aligner import ApproximateWordAligner
 
 
+@dataclass(frozen=True)
+class CandidateMatch:
+    start_index: int
+    end_index: int
+    matched_words: tuple[AlignedWord, ...]
+    match_method: str
+
+
 class TranscriptReconciler:
-    version = "v2"
+    version = "v4"
 
     def __init__(
         self,
         match_window_ms: int = 1000,
         minimum_match_ratio: float = 0.6,
         fuzzy_threshold: float = 0.86,
+        compound_fuzzy_threshold: float = 0.84,
+        minimum_compound_ratio: float = 0.6,
+        max_compound_word_span: int = 3,
     ):
         self.match_window_ms = match_window_ms
         self.minimum_match_ratio = minimum_match_ratio
         self.fuzzy_threshold = fuzzy_threshold
+        self.compound_fuzzy_threshold = compound_fuzzy_threshold
+        self.minimum_compound_ratio = minimum_compound_ratio
+        self.max_compound_word_span = max_compound_word_span
         self.approximate_aligner = ApproximateWordAligner()
 
     def reconcile(
@@ -27,17 +43,19 @@ class TranscriptReconciler:
         matched_words = 0
         exact_matches = 0
         fallback_cues = 0
+        aligned_word_cursor = 0
 
         for cue in cues:
             expected_words = list(cue.words)
             total_words += len(expected_words)
-            candidates = self._candidate_words_for_cue(cue, aligned_words)
+            candidates = self._candidate_words_for_cue(cue, aligned_words, start_index=aligned_word_cursor)
             reconciled_cue, cue_stats = self._reconcile_cue(cue, candidates)
             reconciled_cues.append(reconciled_cue)
             matched_words += cue_stats["matched_words"]
             exact_matches += cue_stats["exact_matches"]
             if reconciled_cue.timing_mode == "approximate":
                 fallback_cues += 1
+            aligned_word_cursor += cue_stats["consumed_candidates"]
 
         total_cues = len(cues)
         quality = {
@@ -48,10 +66,20 @@ class TranscriptReconciler:
         }
         return reconciled_cues, quality
 
-    def _candidate_words_for_cue(self, cue: SubtitleCue, aligned_words: list[AlignedWord]) -> list[AlignedWord]:
+    def _candidate_words_for_cue(
+        self,
+        cue: SubtitleCue,
+        aligned_words: list[AlignedWord],
+        start_index: int = 0,
+    ) -> list[AlignedWord]:
         start_limit = cue.start_ms - self.match_window_ms
-        end_limit = cue.end_ms + self.match_window_ms
-        return [word for word in aligned_words if word.end_ms >= start_limit and word.start_ms <= end_limit]
+        end_limit = cue.end_ms + self._candidate_end_window_ms(cue)
+        return [
+            word for word in aligned_words[start_index:] if word.end_ms >= start_limit and word.start_ms <= end_limit
+        ]
+
+    def _candidate_end_window_ms(self, cue: SubtitleCue) -> int:
+        return max(self.match_window_ms, len(cue.words) * 250)
 
     def _reconcile_cue(self, cue: SubtitleCue, candidates: list[AlignedWord]) -> tuple[ReconciledCue, dict[str, int]]:
         expected_words = list(cue.words)
@@ -59,12 +87,14 @@ class TranscriptReconciler:
             return self._approximate_cue(cue), {
                 "matched_words": 0,
                 "exact_matches": 0,
+                "consumed_candidates": 0,
             }
 
-        matches: list[tuple[int, AlignedWord, str] | None] = [None] * len(expected_words)
+        matches: list[CandidateMatch | None] = [None] * len(expected_words)
         cursor = 0
         matched_words = 0
         exact_matches = 0
+        consumed_candidates = 0
 
         for word_index, display_word in enumerate(expected_words):
             normalized_word = normalize_token(display_word)
@@ -75,14 +105,11 @@ class TranscriptReconciler:
             if matched_index is None:
                 continue
 
-            matches[word_index] = (
-                matched_index,
-                candidates[matched_index],
-                match_method,
-            )
+            matches[word_index] = matched_index
             matched_words += 1
             exact_matches += int(match_method == "exact_normalized")
-            cursor = matched_index + 1
+            cursor = matched_index.end_index + 1
+            consumed_candidates = max(consumed_candidates, cursor)
 
         expected_normalized_words = [
             normalize_token(display_word) for display_word in expected_words if normalize_token(display_word)
@@ -92,6 +119,7 @@ class TranscriptReconciler:
             return self._approximate_cue(cue), {
                 "matched_words": matched_words,
                 "exact_matches": exact_matches,
+                "consumed_candidates": consumed_candidates,
             }
 
         reconciled_words = self._build_reconciled_words(cue, expected_words, matches)
@@ -107,7 +135,11 @@ class TranscriptReconciler:
                 quality_score=quality_score,
                 words=tuple(reconciled_words),
             ),
-            {"matched_words": matched_words, "exact_matches": exact_matches},
+            {
+                "matched_words": matched_words,
+                "exact_matches": exact_matches,
+                "consumed_candidates": consumed_candidates,
+            },
         )
 
     def _find_candidate_match(
@@ -115,26 +147,105 @@ class TranscriptReconciler:
         normalized_word: str,
         candidates: list[AlignedWord],
         cursor: int,
-    ) -> tuple[int | None, str]:
-        for candidate_index in range(cursor, len(candidates)):
-            if candidates[candidate_index].normalized_text == normalized_word:
-                return candidate_index, "exact_normalized"
+    ) -> tuple[CandidateMatch | None, str]:
+        exact_match = self._find_single_candidate_match(normalized_word, candidates, cursor, exact_only=True)
+        if exact_match is not None:
+            return exact_match, exact_match.match_method
 
-        for candidate_index in range(cursor, len(candidates)):
-            ratio = SequenceMatcher(
-                a=normalized_word,
-                b=candidates[candidate_index].normalized_text,
-            ).ratio()
-            if ratio >= self.fuzzy_threshold:
-                return candidate_index, "fuzzy_normalized"
+        fuzzy_match = self._find_single_candidate_match(normalized_word, candidates, cursor, exact_only=False)
+        if fuzzy_match is not None:
+            return fuzzy_match, fuzzy_match.match_method
+
+        compound_match = self._find_compound_candidate_match(normalized_word, candidates, cursor)
+        if compound_match is not None:
+            return compound_match, compound_match.match_method
 
         return None, "unmatched"
+
+    def _find_single_candidate_match(
+        self,
+        normalized_word: str,
+        candidates: list[AlignedWord],
+        cursor: int,
+        *,
+        exact_only: bool,
+    ) -> CandidateMatch | None:
+        for candidate_index in range(cursor, len(candidates)):
+            candidate = candidates[candidate_index]
+            if candidate.normalized_text == normalized_word:
+                return self._build_candidate_match(candidate_index, candidate_index, (candidate,), "exact_normalized")
+            if exact_only:
+                continue
+
+            ratio = SequenceMatcher(a=normalized_word, b=candidate.normalized_text).ratio()
+            if ratio >= self.fuzzy_threshold:
+                return self._build_candidate_match(candidate_index, candidate_index, (candidate,), "fuzzy_normalized")
+
+        return None
+
+    def _find_compound_candidate_match(
+        self,
+        normalized_word: str,
+        candidates: list[AlignedWord],
+        cursor: int,
+    ) -> CandidateMatch | None:
+        expected_compact = self._compact_token(normalized_word)
+        if len(expected_compact) < 5:
+            return None
+
+        expected_consonants = self._consonant_signature(expected_compact)
+        best_match: CandidateMatch | None = None
+        best_score = 0.0
+
+        for start_index in range(cursor, len(candidates)):
+            max_end_index = min(len(candidates), start_index + self.max_compound_word_span)
+            for end_index in range(start_index + 1, max_end_index):
+                matched_words = tuple(candidates[start_index : end_index + 1])
+                best_span_score = self._compound_match_score(
+                    expected_compact,
+                    expected_consonants,
+                    matched_words,
+                )
+                if best_span_score is None or best_span_score < self.compound_fuzzy_threshold:
+                    continue
+
+                if best_match is None or best_span_score > best_score:
+                    best_match = self._build_candidate_match(
+                        start_index,
+                        end_index,
+                        matched_words,
+                        "compound_normalized",
+                    )
+                    best_score = best_span_score
+
+        return best_match
+
+    def _compound_match_score(
+        self,
+        expected_compact: str,
+        expected_consonants: str,
+        matched_words: tuple[AlignedWord, ...],
+    ) -> float | None:
+        compact_candidate = self._compact_token("".join(word.normalized_text for word in matched_words))
+        if not compact_candidate:
+            return None
+
+        compact_ratio = SequenceMatcher(a=expected_compact, b=compact_candidate).ratio()
+        if compact_ratio < self.minimum_compound_ratio:
+            return None
+
+        consonant_ratio = 0.0
+        candidate_consonants = self._consonant_signature(compact_candidate)
+        if expected_consonants and candidate_consonants:
+            consonant_ratio = SequenceMatcher(a=expected_consonants, b=candidate_consonants).ratio()
+
+        return max(compact_ratio, consonant_ratio)
 
     def _build_reconciled_words(
         self,
         cue: SubtitleCue,
         expected_words: list[str],
-        matches: list[tuple[int, AlignedWord, str] | None],
+        matches: list[CandidateMatch | None],
     ) -> list[ReconciledWord]:
         reconciled_words: list[ReconciledWord | None] = [None] * len(expected_words)
 
@@ -142,16 +253,7 @@ class TranscriptReconciler:
             if match is None:
                 continue
 
-            _, matched_word, match_method = match
-            reconciled_words[word_index] = ReconciledWord(
-                display_text=expected_words[word_index],
-                start_ms=matched_word.start_ms,
-                end_ms=matched_word.end_ms,
-                confidence=matched_word.confidence,
-                source="reconciled",
-                match_method=match_method,
-                fallback_used=False,
-            )
+            reconciled_words[word_index] = self._build_direct_reconciled_word(expected_words[word_index], match)
 
         word_index = 0
         while word_index < len(reconciled_words):
@@ -173,27 +275,14 @@ class TranscriptReconciler:
                 next_word,
                 run_length=run_length,
             )
-            segment_duration = max(span_end - span_start, run_length)
-            time_per_word = max(segment_duration // run_length, 1)
-
-            for offset in range(run_length):
-                current_index = run_start + offset
-                word_start = span_start + offset * time_per_word
-                word_end = span_start + (offset + 1) * time_per_word
-                if offset == run_length - 1:
-                    word_end = max(word_end, span_end)
-                if word_end <= word_start:
-                    word_end = word_start + 1
-
-                reconciled_words[current_index] = ReconciledWord(
-                    display_text=expected_words[current_index],
-                    start_ms=word_start,
-                    end_ms=word_end,
-                    confidence=0.0,
-                    source="interpolated",
-                    match_method="interpolated",
-                    fallback_used=False,
-                )
+            self._fill_interpolated_run(
+                expected_words,
+                reconciled_words,
+                run_start,
+                run_length,
+                span_start,
+                span_end,
+            )
 
             word_index = run_end + 1
 
@@ -268,3 +357,69 @@ class TranscriptReconciler:
             0.5 * matched_ratio + 0.3 * exact_ratio + 0.2 * timing_coverage_ratio,
             4,
         )
+
+    @staticmethod
+    def _compact_token(text: str) -> str:
+        return re.sub(r"[^a-z0-9]", "", normalize_token(text))
+
+    @staticmethod
+    def _consonant_signature(text: str) -> str:
+        return re.sub(r"[aeiou]", "", text)
+
+    @staticmethod
+    def _build_candidate_match(
+        start_index: int,
+        end_index: int,
+        matched_words: tuple[AlignedWord, ...],
+        match_method: str,
+    ) -> CandidateMatch:
+        return CandidateMatch(
+            start_index=start_index,
+            end_index=end_index,
+            matched_words=matched_words,
+            match_method=match_method,
+        )
+
+    @staticmethod
+    def _build_direct_reconciled_word(display_text: str, match: CandidateMatch) -> ReconciledWord:
+        confidence = sum(word.confidence for word in match.matched_words) / len(match.matched_words)
+        return ReconciledWord(
+            display_text=display_text,
+            start_ms=match.matched_words[0].start_ms,
+            end_ms=match.matched_words[-1].end_ms,
+            confidence=confidence,
+            source="reconciled",
+            match_method=match.match_method,
+            fallback_used=False,
+        )
+
+    @staticmethod
+    def _fill_interpolated_run(
+        expected_words: list[str],
+        reconciled_words: list[ReconciledWord | None],
+        run_start: int,
+        run_length: int,
+        span_start: int,
+        span_end: int,
+    ) -> None:
+        segment_duration = max(span_end - span_start, run_length)
+        time_per_word = max(segment_duration // run_length, 1)
+
+        for offset in range(run_length):
+            current_index = run_start + offset
+            word_start = span_start + offset * time_per_word
+            word_end = span_start + (offset + 1) * time_per_word
+            if offset == run_length - 1:
+                word_end = max(word_end, span_end)
+            if word_end <= word_start:
+                word_end = word_start + 1
+
+            reconciled_words[current_index] = ReconciledWord(
+                display_text=expected_words[current_index],
+                start_ms=word_start,
+                end_ms=word_end,
+                confidence=0.0,
+                source="interpolated",
+                match_method="interpolated",
+                fallback_used=False,
+            )

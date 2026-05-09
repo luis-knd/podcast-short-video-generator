@@ -113,7 +113,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text"
         assert "\\t(0,120,\\fscx120\\fscy120)" in ass_content
 
         # Exact position assertions to kill layout math mutants
-        assert "{\\an5\\pos(540,1050)}8." in ass_content
+        assert "Dialogue: 0,0:00:00.00,0:00:00.50,BaseLayer,,0,0,0,,{\\an5\\pos(540,1050)}8." not in ass_content
+        assert "\\an5\\pos(540,1050)\\t(0,120,\\fscx120\\fscy120)}8." in ass_content
         assert "{\\an5\\pos(418,993)}Gracias" in ass_content
         assert "{\\an5\\pos(654,993)}por" in ass_content
         assert "{\\an5\\pos(540,1107)}invitación." in ass_content
@@ -616,7 +617,6 @@ def test_write_ass_file_should_use_exact_config_keys_and_dialogue_format(tmp_pat
         "\n"
         "[Events]\n"
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
-        "Dialogue: 0,0:00:00.00,0:00:00.50,BaseLayer,,0,0,0,,{\\an5\\pos(540,777)}Alpha\n"
         "Dialogue: 1,0:00:00.00,0:00:00.50,ActiveLayer,,0,0,0,,"
         "{\\c&Hefcdab&\\an5\\pos(540,777)\\t(0,120,\\fscx120\\fscy120)}Alpha\n"
     )

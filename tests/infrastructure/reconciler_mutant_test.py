@@ -87,9 +87,11 @@ def test_reconciler_find_candidate_match_respects_cursor_start():
         _word("beta", 500, 600),
     ]
 
-    index, method = reconciler._find_candidate_match("alpha", candidates, cursor=1)
+    match, method = reconciler._find_candidate_match("alpha", candidates, cursor=1)
 
-    assert index == 1
+    assert match is not None
+    assert match.start_index == 1
+    assert match.end_index == 1
     assert method == "exact_normalized"
 
 

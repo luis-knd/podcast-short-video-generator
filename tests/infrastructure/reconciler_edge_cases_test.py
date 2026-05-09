@@ -205,3 +205,80 @@ def test_reconciler_places_unmatched_leading_word_before_next_resolved_word():
     assert words[0].source == "interpolated"
     assert words[0].end_ms <= words[1].start_ms
     assert [word.start_ms for word in words] == sorted(word.start_ms for word in words)
+
+
+def test_reconciler_keeps_whisper_timing_for_syllabified_subtitle_words():
+    reconciler = TranscriptReconciler()
+    cue = _cue(
+        "NU-ance. NU-ance. Two syllables, stress on",
+        cue_id="cue-syllables",
+        start_ms=193460,
+        end_ms=196064,
+    )
+    aligned_words = [
+        _word("New", 194060, 194240),
+        _word("ounce.", 194240, 194680, normalized_text="ounce"),
+        _word("New", 195260, 195420),
+        _word("ounce.", 195420, 195780, normalized_text="ounce"),
+        _word("Two", 196300, 196480),
+        _word("syllables", 196480, 196820),
+        _word("stress", 196820, 197400),
+        _word("on", 197400, 197600),
+    ]
+
+    reconciled_cues, quality = run_reconcile_with_watchdog(reconciler, [cue], aligned_words)
+
+    assert reconciled_cues[0].timing_mode == "reconciled_asr"
+    assert [(word.display_text, word.start_ms, word.end_ms) for word in reconciled_cues[0].words] == [
+        ("NU-ance.", 194060, 194680),
+        ("NU-ance.", 195260, 195780),
+        ("Two", 196300, 196480),
+        ("syllables,", 196480, 196820),
+        ("stress", 196820, 197400),
+        ("on", 197400, 197600),
+    ]
+    assert quality["matched_word_ratio"] == 1.0
+    assert quality["fallback_cue_ratio"] == 0.0
+
+
+def test_reconciler_does_not_reuse_aligned_word_occurrence_across_adjacent_cues():
+    reconciler = TranscriptReconciler(minimum_match_ratio=0.5)
+    cues = [
+        _cue(
+            "need to understand the nuances of",
+            cue_id="cue-110",
+            start_ms=199982,
+            end_ms=202590,
+        ),
+        _cue(
+            'the language."',
+            cue_id="cue-111",
+            start_ms=202590,
+            end_ms=203460,
+        ),
+    ]
+    aligned_words = [
+        _word("need", 201000, 201200, normalized_text="need"),
+        _word("to", 201200, 201380, normalized_text="to"),
+        _word("understand", 201380, 201880, normalized_text="understand"),
+        _word("the", 201880, 202080, normalized_text="the"),
+        _word("nuances", 202080, 202440, normalized_text="nuances"),
+        _word("of", 202440, 202880, normalized_text="of"),
+        _word("the", 202880, 202980, normalized_text="the"),
+        _word("language.", 202980, 203320, normalized_text="language"),
+    ]
+
+    reconciled_cues, _ = run_reconcile_with_watchdog(reconciler, cues, aligned_words)
+
+    assert [(word.display_text, word.start_ms) for word in reconciled_cues[0].words] == [
+        ("need", 201000),
+        ("to", 201200),
+        ("understand", 201380),
+        ("the", 201880),
+        ("nuances", 202080),
+        ("of", 202440),
+    ]
+    assert [(word.display_text, word.start_ms) for word in reconciled_cues[1].words] == [
+        ("the", 202880),
+        ('language."', 202980),
+    ]
